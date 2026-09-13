@@ -40,11 +40,11 @@ jobs:
           gradle-version: '8.10.2'
 
       - name: Build APK
-        working-directory: project/Daily_Quest_Android_Project
+        working-directory: project
         run: gradle --no-daemon assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Daily-Quest-APK
-          path: project/Daily_Quest_Android_Project/app/build/outputs/apk/debug/app-debug.apk
+          path: path: project/app/build/outputs/apk/debug/app-debug.apk
