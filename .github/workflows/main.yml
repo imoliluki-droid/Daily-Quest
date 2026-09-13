@@ -16,10 +16,8 @@ jobs:
 
       - name: Extract Android project
         run: |
-          mkdir project
-          unzip -o Daily_Quest_PhoneBuild.zip -d project
-          cd project
-          find . -maxdepth 3 -type f | head -50
+          unzip -o Daily_Quest_PhoneBuild.zip
+          find . -maxdepth 4 -type f | head -100
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -40,11 +38,16 @@ jobs:
           gradle-version: '8.10.2'
 
       - name: Build APK
-        working-directory: project
+        working-directory: Daily_Quest_Android_Project
         run: gradle --no-daemon assembleDebug
+
+      - name: Find APK
+        run: |
+          echo "Searching for APK..."
+          find . -name "*.apk" -type f
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Daily-Quest-APK
-          path: path:project/app/build/outputs/apk/debug/app-debug.apk
+          path: '**/app-debug.apk'
