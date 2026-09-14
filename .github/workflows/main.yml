@@ -27,12 +27,126 @@ jobs:
           echo "Extracted files:"
           find build_project -maxdepth 6 -type f | head -100
 
-      - name: Apply latest Daily Quest HTML
+      - name: Apply latest Daily Quest HTML and native notifications
         run: |
           PROJECT=$(dirname "$(find build_project -name settings.gradle -type f | head -1)")
-          mkdir -p "$PROJECT/app/src/main/assets"
-          cp Daily_Quest_Web/index.html "$PROJECT/app/src/main/assets/index.html"
-          echo "Updated HTML: $PROJECT/app/src/main/assets/index.html"
+          APP="$PROJECT/app/src/main"
+          mkdir -p "$APP/assets"
+          cp Daily_Quest_Web/index.html "$APP/assets/index.html"
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("$APP/assets/index.html")
+          text = p.read_text(encoding="utf-8")
+          old = '<button class="secondary" onclick="requestNotify()">🔔 Enable notifications</button><button class="danger" onclick="resetAll()">Reset all data</button>'
+          new = '<button class="secondary" onclick="requestNotify()">🔔 Enable notifications</button><button class="good" onclick="sendTestNotification()">📲 Send test notification</button><button class="danger" onclick="resetAll()">Reset all data</button>'
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif 'sendTestNotification()' not in text:
+              text = text.replace('</script>', '''\nfunction requestNotify(){\n  if(window.AndroidNotifications){AndroidNotifications.requestPermission();}\n  else if('Notification' in window){Notification.requestPermission();}\n  else{alert('Native Android notifications are unavailable.');}\n}\nfunction sendTestNotification(){\n  if(window.AndroidNotifications){AndroidNotifications.sendTestNotification();}\n  else if('Notification' in window && Notification.permission==='granted'){new Notification('⚔️ Daily Quest',{body:'Notification system is working!' });}\n  else{alert('Enable notifications first.');}\n}\n</script>''', 1)
+          else:
+              pass
+          if 'function sendTestNotification()' not in text:
+              text = text.replace('</script>', '''\nfunction requestNotify(){if(window.AndroidNotifications){AndroidNotifications.requestPermission();}else if('Notification' in window){Notification.requestPermission();}}\nfunction sendTestNotification(){if(window.AndroidNotifications){AndroidNotifications.sendTestNotification();}else if('Notification' in window && Notification.permission==='granted'){new Notification('⚔️ Daily Quest',{body:'Notification system is working!'});}}\n</script>''', 1)
+          p.write_text(text, encoding="utf-8")
+          PY
+
+          cat > "$APP/java/com/dailyquest/app/MainActivity.java" <<'JAVA'
+          package com.dailyquest.app;
+
+          import android.Manifest;
+          import android.app.Activity;
+          import android.app.NotificationChannel;
+          import android.app.NotificationManager;
+          import android.content.pm.PackageManager;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.webkit.JavascriptInterface;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+
+          public class MainActivity extends Activity {
+              private static final int NOTIFICATION_REQUEST_CODE = 1001;
+              private static final String CHANNEL_ID = "daily_quest_notifications";
+              private NotificationManager notificationManager;
+
+              @Override public void onCreate(Bundle state) {
+                  super.onCreate(state);
+                  notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                  createNotificationChannel();
+
+                  WebView w = new WebView(this);
+                  w.setWebViewClient(new WebViewClient());
+                  WebSettings s = w.getSettings();
+                  s.setJavaScriptEnabled(true);
+                  s.setDomStorageEnabled(true);
+                  s.setAllowFileAccess(true);
+                  w.addJavascriptInterface(new NotificationBridge(), "AndroidNotifications");
+                  w.loadUrl("file:///android_asset/index.html");
+                  setContentView(w);
+              }
+
+              private void createNotificationChannel() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      NotificationChannel channel = new NotificationChannel(
+                          CHANNEL_ID,
+                          "Daily Quest",
+                          NotificationManager.IMPORTANCE_DEFAULT
+                      );
+                      channel.setDescription("Daily Quest reminders and test notifications");
+                      notificationManager.createNotificationChannel(channel);
+                  }
+              }
+
+              private boolean notificationsAllowed() {
+                  return Build.VERSION.SDK_INT < 33 ||
+                      checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
+              }
+
+              private void requestNativeNotificationPermission() {
+                  if (Build.VERSION.SDK_INT >= 33 && !notificationsAllowed()) {
+                      requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, NOTIFICATION_REQUEST_CODE);
+                  }
+              }
+
+              private void showTestNotification() {
+                  if (!notificationsAllowed()) {
+                      requestNativeNotificationPermission();
+                      return;
+                  }
+                  android.app.Notification.Builder builder;
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      builder = new android.app.Notification.Builder(this, CHANNEL_ID);
+                  } else {
+                      builder = new android.app.Notification.Builder(this);
+                  }
+                  builder.setSmallIcon(android.R.drawable.ic_dialog_info)
+                         .setContentTitle("⚔️ Daily Quest")
+                         .setContentText("Notification system is working!")
+                         .setAutoCancel(true);
+                  notificationManager.notify(1001, builder.build());
+              }
+
+              public class NotificationBridge {
+                  @JavascriptInterface
+                  public void requestPermission() {
+                      runOnUiThread(() -> requestNativeNotificationPermission());
+                  }
+
+                  @JavascriptInterface
+                  public void sendTestNotification() {
+                      runOnUiThread(() -> showTestNotification());
+                  }
+              }
+          }
+          JAVA
+
+          MANIFEST="$APP/AndroidManifest.xml"
+          if ! grep -q 'android.permission.POST_NOTIFICATIONS' "$MANIFEST"; then
+            sed -i '/<application/i\    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "$MANIFEST"
+          fi
+          echo "Native notification support applied."
 
       - name: Repack updated Android project ZIP
         run: |
@@ -50,7 +164,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No ZIP changes to commit."
           else
-            git commit -m "Update Daily Quest Android project with latest HTML"
+            git commit -m "Add native Daily Quest notifications"
             git push
           fi
 
