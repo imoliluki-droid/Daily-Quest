@@ -1,0 +1,49 @@
+name: Repair Vercel Production Routing
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/vercel-routing-fix.yml'
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Verify Vercel token exists
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo 'VERCEL_TOKEN secret is not configured in this repository.'
+            exit 1
+          fi
+          echo 'Vercel token is configured.'
+
+      - name: Disable Vercel Authentication for the project
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          vercel project protection disable daily-quest --sso --scope dq-7c36 --token "$VERCEL_TOKEN"
+
+      - name: Remove stale production alias
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          vercel alias rm daily-quest-theta.vercel.app --yes --scope dq-7c36 --token "$VERCEL_TOKEN" || true
+
+      - name: Reassign production alias to current deployment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          vercel alias set https://daily-quest-c2qme4j05-dq-7c36.vercel.app daily-quest-theta.vercel.app --scope dq-7c36 --token "$VERCEL_TOKEN"
+
+      - name: Verify aliases
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          vercel alias ls --limit 100 --scope dq-7c36 --token "$VERCEL_TOKEN"
