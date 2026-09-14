@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Daily Quest</title>
+
+<style>
+:root{
+  --bg:#080b12;
+  --bg2:#111622;
+  --card:#151b27;
+  --card2:#1d2534;
+  --card3:#252f42;
+  --text:#f5f7ff;
+  --muted:#8995aa;
+  --accent:#8b7cff;
+  --accent2:#6c5ce7;
+  --good:#4cdb8a;
+  --warn:#ffc857;
+  --danger:#ff6477;
+  --border:#293346;
+  --shadow:0 12px 35px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{scroll-behavior:smooth}
+body{margin:0;min-height:100vh;background:radial-gradient(circle at 10% 0%,#211d45 0%,transparent 30%),radial-gradient(circle at 100% 10%,#182b4a 0%,transparent 28%),linear-gradient(160deg,var(--bg),var(--bg2));color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+button,input{font:inherit}button{border:0;border-radius:12px;padding:10px 14px;background:var(--accent);color:white;font-weight:800;cursor:pointer;transition:.15s}button:active{transform:scale(.96)}button.secondary{background:#30394c}button.danger{background:#843947}button.good{background:#287b55}
+.wrap{max-width:950px;margin:auto;padding:18px;padding-top:28px}.top{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:18px}.title{font-size:30px;font-weight:950;letter-spacing:-1px}.sub{color:var(--muted);font-size:13px;margin-top:3px}.online{white-space:nowrap}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:13px}.card{background:linear-gradient(145deg,var(--card),#121722);border:1px solid var(--border);border-radius:20px;padding:17px;box-shadow:var(--shadow)}.wide{grid-column:1/-1}.card h2{margin-top:0}
+.stat{font-size:34px;font-weight:950}.label{color:var(--muted);font-size:12px}.xp-text{display:flex;justify-content:space-between;margin-top:6px}.bar{height:10px;background:#293244;border-radius:99px;overflow:hidden;margin-top:8px}.fill{height:100%;width:0%;background:linear-gradient(90deg,var(--accent2),var(--accent));border-radius:99px;transition:.35s}
+.quest{display:flex;align-items:center;gap:13px;padding:14px;background:var(--card2);border:1px solid transparent;border-radius:15px;margin:9px 0;transition:.2s}.quest:hover{border-color:#39445a}.quest input{width:22px;height:22px;accent-color:var(--accent);flex-shrink:0}.quest-info{min-width:0}.quest b{display:block;font-size:15px}.quest small{color:var(--muted);display:block;margin-top:3px}.done{opacity:.52}.done b{text-decoration:line-through}
+.timerbox{padding:15px;background:var(--card2);border-radius:16px;margin-top:11px;border:1px solid #293548}.timerbox h3{margin:0}.timer{font-size:40px;font-weight:950;letter-spacing:1px;margin:10px 0}.timer-row{display:flex;gap:8px;flex-wrap:wrap}.timerbox input,.fund input{background:#0b0f17;border:1px solid #394459;color:white;border-radius:10px;padding:9px;width:100px;outline:none}.timerbox input:focus,.fund input:focus{border-color:var(--accent)}.note{color:var(--muted);font-size:12px;line-height:1.5}.pill{display:inline-block;padding:4px 9px;border-radius:99px;background:#30394b;color:#dce3f2;font-size:11px;vertical-align:middle}.fund-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.chat{height:180px;overflow-y:auto;background:#0b0f17;border:1px solid #30394a;border-radius:13px;padding:12px;margin:12px 0}.chat-user,.chat-ai{margin-bottom:10px;line-height:1.45}.chat-ai{color:#aeb8c9}.chat-input{display:flex;gap:8px}.chat-input input{flex:1;min-width:0;background:#0b0f17;border:1px solid #394459;color:white;border-radius:10px;padding:10px;outline:none}
+#menuBtn{position:fixed;top:14px;left:14px;z-index:100;width:48px;height:44px;padding:0;font-size:21px;box-shadow:0 8px 25px #0006}#menuPanel{display:none;position:fixed;top:66px;left:14px;z-index:99;width:310px;max-height:calc(100vh - 82px);overflow-y:auto;background:#111722;border:1px solid #354055;border-radius:18px;padding:15px;box-shadow:0 20px 60px #0009}.menu-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.menu-title h3{margin:0}.menu-buttons{display:grid;gap:8px}.menu-buttons button{text-align:left}.menu-content{margin-top:12px}.menu-box{background:var(--card2);border:1px solid #303a4e;border-radius:14px;padding:13px}.menu-box h3{margin-top:0}.progress-stat{background:#151b27;border:1px solid #303a4d;border-radius:12px;padding:12px;margin:8px 0}.setting-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid #30394b}.setting-row:last-child{border-bottom:0}.setting-row input{width:21px;height:21px;accent-color:var(--accent)}
+.calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-top:10px}.calendar-day{background:#252e40;border-radius:8px;padding:7px 3px;text-align:center;font-size:11px}.footer{margin:20px 0 5px;text-align:center;color:#606b80;font-size:11px}
+@media(max-width:650px){.wrap{padding:14px;padding-top:25px}.grid{grid-template-columns:1fr}.wide{grid-column:auto}.title{font-size:24px}.top{align-items:flex-start}.online{font-size:11px;padding:8px 10px}#menuPanel{width:calc(100vw - 28px)}.timer{font-size:34px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="top"><div><div class="title">⚔️ Daily Quest</div><div class="sub" id="date">Loading date...</div><div class="sub">🕒 World time: <b id="worldTime">--:--:--</b></div></div><button class="pill online" id="online" onclick="toggleOnlineMode()">📱 Offline mode</button></div>
+<button id="menuBtn" onclick="toggleMenu()">☰</button>
+<div id="menuPanel"><div class="menu-title"><h3>☰ Menu</h3><button class="secondary" onclick="closeMenu()">×</button></div><div class="menu-buttons"><button class="secondary" onclick="showCalendar()">🗓️ Calendar</button><button class="secondary" onclick="showProgress()">📊 Progress</button><button class="secondary" onclick="showSettings()">⚙️ Settings</button><button class="secondary" onclick="showAIInfo()">🤖 AI Companion</button></div><div id="menuContent" class="menu-content"></div></div>
+<div class="grid">
+<div class="card"><div class="label">LEVEL</div><div class="stat" id="level">1</div><div class="xp-text"><span class="label"><span id="xp">0</span> XP</span><span class="label" id="nextLevel">0 / 500</span></div><div class="bar"><div class="fill" id="xpbar"></div></div></div>
+<div class="card"><div class="label">🔥 STREAK</div><div class="stat" id="streak">0</div><div class="label">consecutive days completed</div></div>
+<div class="card wide"><h2>🎯 Today's Quests</h2><div id="questSummary" class="note">0/5 completed</div><div id="quests"></div></div>
+<div class="card wide"><h2>⏱️ Quest Timers</h2>
+<div class="timerbox"><h3>📚 Study <span class="pill">minimum 30 min</span></h3><div class="timer" id="studyTime">30:00</div><div class="timer-row"><input id="studyMin" type="number" min="30" value="30"><button onclick="startTimer('study')">Start</button><button class="secondary" onclick="pauseTimer('study')">Pause</button><button class="secondary" onclick="resetTimer('study')">Reset</button></div></div>
+<div class="timerbox"><h3>🎬 Editing</h3><div class="timer" id="editTime">60:00</div><div class="timer-row"><input id="editMin" type="number" min="1" value="60"><button onclick="startTimer('edit')">Start</button><button class="secondary" onclick="pauseTimer('edit')">Pause</button><button class="secondary" onclick="resetTimer('edit')">Reset</button></div></div>
+<div class="timerbox"><h3>🏋️ Training</h3><div class="timer" id="trainTime">30:00</div><div class="timer-row"><input id="trainMin" type="number" min="1" value="30"><button onclick="startTimer('train')">Start</button><button class="secondary" onclick="pauseTimer('train')">Pause</button><button class="secondary" onclick="resetTimer('train')">Reset</button></div></div>
+<div class="timerbox"><h3>😴 Sleep</h3><div class="timer" id="sleepTime">08:00:00</div><div class="timer-row"><input id="sleepHr" type="number" min="7" step=".5" value="8"><button onclick="startSleep()">Start</button><button class="secondary" onclick="pauseTimer('sleep')">Pause</button><button class="secondary" onclick="resetTimer('sleep')">Reset</button></div><div class="note">7+ hours counts. There is no upper limit.</div></div>
+<p class="note">Timers run while the app is active. Reliable background notifications will be added through native Android support.</p></div>
+<div class="card fund"><h2>💰 PC Fund</h2><div class="fund-row"><span>Goal ₱</span><input id="goal" type="number" min="1" value="4000"><span>Saved ₱</span><input id="saved" type="number" min="0" value="0"></div><div class="bar"><div class="fill" id="fundbar"></div></div><p class="label" id="fundtext">₱0 / ₱4,000</p><button onclick="saveFund()">Save Fund</button></div>
+<div class="card"><h2>🤖 AI Companion</h2><div id="aiStatus" class="pill">🤖 AI is offline</div><div id="chatLog" class="chat"><div class="chat-ai"><b>Quest AI:</b> Hey! I'm your quest companion. Complete quests, build your streak, and keep pushing toward your goals.</div></div><div class="chat-input"><input id="chatInput" placeholder="Talk to your quest companion..." onkeydown="if(event.key==='Enter')sendAI()"><button onclick="sendAI()">Send</button></div><p class="note">AI service connection will be added through a secure backend. Your API key will never be stored directly inside the APK.</p></div>
+<div class="card wide"><h2>💾 Data & Notifications</h2><div class="timer-row"><button class="secondary" onclick="requestNotify()">🔔 Enable notifications</button><button class="danger" onclick="resetAll()">Reset all data</button></div><p class="note">Your progress is currently saved locally on this device.</p></div>
+</div><div class="footer">Daily Quest • Offline-first prototype</div></div>
+<script>
+const KEY='editorQuestV3';
+let s=JSON.parse(localStorage.getItem(KEY)||'null')||{xp:0,streak:0,lastDay:'',quests:{},claimed:{},days:{},goal:4000,saved:0};
+function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+document.getElementById('date').textContent=new Date().toLocaleDateString(undefined,{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+function save(){localStorage.setItem(KEY,JSON.stringify(s))}
+const q=[['college','🎓','College','Attend your scheduled classes','7:00 AM – 12:00 PM'],['study','📚','Study','Complete at least 30 minutes','2:00 PM – 3:00 PM'],['edit','🎬','Editing','Work on an editing project','3:00 PM – 6:00 PM'],['train','🏋️','Training','Complete your workout','5:00 PM – 5:30 PM'],['sleep','😴','Sleep','Get at least 7 hours','10:00 PM – 6:00 AM']];
+function toggle(id,checked){const d=today();s.quests[id]=checked?1:0;if(checked&&!s.claimed[id+'_'+d]){s.claimed[id+'_'+d]=1;s.xp+=50}save();updateStreak();render()}
+function updateStreak(){const all=q.every(x=>s.quests[x[0]]);if(all&&!s.days[today()]){s.days[today()]=1;const prev=new Date();prev.setDate(prev.getDate()-1);const pd=prev.getFullYear()+'-'+String(prev.getMonth()+1).padStart(2,'0')+'-'+String(prev.getDate()).padStart(2,'0');s.streak=s.days[pd]?s.streak+1:1;s.lastDay=today();save()}}
+function toggleMenu(){const panel=document.getElementById('menuPanel');panel.style.display=panel.style.display==='block'?'none':'block'}
+function closeMenu(){document.getElementById('menuPanel').style.display='none'}
+function showCalendar(){const box=document.getElementById('menuContent');let out=`<div class="menu-box"><h3>🗓️ 30-Day Campaign</h3><div class="calendar-grid">`;for(let i=0;i<30;i++){const dt=new Date();dt.setDate(dt.getDate()-((dt.getDay()+6)%7)+i);const ds=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');const mark=s.days[ds]?'✅':(ds===today()?'🔵':'');out+=`<div class="calendar-day">${i+1}<br>${mark}</div>`}out+=`</div><p class="note">✅ completed • 🔵 today</p></div>`;box.innerHTML=out}
+function showProgress(){const completed=q.filter(x=>s.quests[x[0]]).length,total=q.length,percentage=Math.round(completed/total*100),level=Math.floor(s.xp/500)+1,currentXP=s.xp%500,xpPercent=currentXP/5;document.getElementById('menuContent').innerHTML=`<div class="menu-box"><h3>📊 Character Progress</h3><div class="progress-stat"><b>⚔️ Level ${level}</b><p>${currentXP} / 500 XP</p><div class="bar"><div class="fill" style="width:${xpPercent}%"></div></div></div><div class="progress-stat"><b>⭐ Total XP</b><p>${s.xp} XP</p></div><div class="progress-stat"><b>🔥 Streak</b><p>${s.streak} day(s)</p></div><div class="progress-stat"><b>🎯 Today's Quests</b><p>${completed}/${total} (${percentage}%)</p><div class="bar"><div class="fill" style="width:${percentage}%"></div></div></div><div class="progress-stat"><b>💰 PC Fund</b><p>₱${s.saved.toLocaleString()} / ₱${s.goal.toLocaleString()}</p></div></div>`}
+function showSettings(){document.getElementById('menuContent').innerHTML=`<div class="menu-box"><h3>⚙️ Settings</h3><div class="setting-row"><div><b>🌐 Online Mode</b><div class="note">Allow online AI features.</div></div><input type="checkbox" ${onlineMode?'checked':''} onchange="changeOnlineSetting(this.checked)"></div><div class="setting-row"><div><b>🔔 Notifications</b><div class="note">Android notification support will be connected separately.</div></div><button class="secondary" onclick="requestNotify()">Enable</button></div><div class="setting-row"><div><b>💾 Local Data</b><div class="note">Your quest progress is stored on this device.</div></div><button class="danger" onclick="resetAll()">Reset</button></div></div>`}
+function showAIInfo(){document.getElementById('menuContent').innerHTML=`<div class="menu-box"><h3>🤖 W Speed</h3><p>Your AI quest companion.</p><div class="progress-stat"><b>Current status</b><p>${onlineMode?'🌐 Online Mode enabled':'📱 Offline Mode'}</p></div><p class="note">W Speed will eventually be able to help manage quests, give advice, track progress, and assist with your Daily Quest journey.</p><p class="note">The secure AI backend will be added later. No API key will be stored inside the APK.</p></div>`}
+let onlineMode=localStorage.getItem('eq_onlineMode')==='1';
+function changeOnlineSetting(enabled){onlineMode=enabled;localStorage.setItem('eq_onlineMode',enabled?'1':'0');updateOnlineUI()}
+function toggleOnlineMode(){onlineMode=!onlineMode;localStorage.setItem('eq_onlineMode',onlineMode?'1':'0');updateOnlineUI()}
+function updateOnlineUI(){const pill=document.getElementById('online'),status=document.getElementById('aiStatus');if(onlineMode&&navigator.onLine){pill.textContent='🌐 Online mode';status.textContent='🤖 AI Companion ready'}else if(onlineMode&&!navigator.onLine){pill.textContent='📴 No internet';status.textContent='🤖 AI waiting for internet'}else{pill.textContent='📱 Offline mode';status.textContent='🤖 AI is offline'}}
+window.addEventListener('online',updateOnlineUI);window.addEventListener('offline',updateOnlineUI);
+function updateClock(){const now=new Date();document.getElementById('worldTime').textContent=now.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit',second:'2-digit'})}setInterval(updateClock,1000);updateClock();
+function sendAI(){const input=document.getElementById('chatInput'),text=input.value.trim();if(!text)return;const log=document.getElementById('chatLog'),user=document.createElement('div');user.className='chat-user';user.innerHTML='<b>You:</b> '+escapeHTML(text);log.appendChild(user);const ai=document.createElement('div');ai.className='chat-ai';if(!onlineMode||!navigator.onLine){ai.innerHTML='<b>W Speed:</b> You are currently offline. Your quests, timers, XP, and progress still work normally.'}else{ai.innerHTML='<b>W Speed:</b> Online Mode is active, but my secure AI connection has not been connected yet. That will be added in the next stage.'}log.appendChild(ai);log.scrollTop=log.scrollHeight;input.value=''}
+function escapeHTML(text){return text.replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]})}
+function render(){const level=Math.floor(s.xp/500)+1,currentXP=s.xp%500;document.getElementById('level').textContent=level;document.getElementById('xp').textContent=s.xp;document.getElementById('nextLevel').textContent=currentXP+' / 500';document.getElementById('streak').textContent=s.streak;document.getElementById('xpbar').style.width=(currentXP/5)+'%';const completed=q.filter(x=>s.quests[x[0]]).length;document.getElementById('questSummary').textContent=completed+'/'+q.length+' completed';document.getElementById('quests').innerHTML=q.map(x=>`<label class="quest ${s.quests[x[0]]?'done':''}"><input type="checkbox" ${s.quests[x[0]]?'checked':''} onchange="toggle('${x[0]}',this.checked)"><div class="quest-info"><b>${x[1]} ${x[2]}</b><small>${x[3]} • 🕒 ${x[4]} • +50 XP</small></div></label>`).join('');document.getElementById('goal').value=s.goal;document.getElementById('saved').value=s.saved;const percent=Math.min(100,s.goal>0?s.saved/s.goal*100:0);document.getElementById('fundbar').style.width=percent+'%';document.getElementById('fundtext').textContent=`₱${s.saved.toLocaleString()} / ₱${s.goal.toLocaleString()} (${percent.toFixed(1)}%)`}
+function saveFund(){const goal=Number(document.getElementById('goal').value),saved=Number(document.getElementById('saved').value);if(goal>0&&saved>=0){s.goal=goal;s.saved=saved;save();render()}}
+const timer={study:{sec:1800,base:1800,run:false},edit:{sec:3600,base:3600,run:false},train:{sec:1800,base:1800,run:false},sleep:{sec:28800,base:28800,run:false}};
+function fmt(sec,sleep=false){sec=Math.max(0,Math.round(sec));if(sleep){const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),z=sec%60;return[h,m,z].map(v=>String(v).padStart(2,'0')).join(':')}const m=Math.floor(sec/60),z=sec%60;return String(m).padStart(2,'0')+':'+String(z).padStart(2,'0')}
+function draw(t){document.getElementById(t+'Time').textContent=fmt(timer[t].sec,t==='sleep')}
+function setFromInput(t){const id=t==='sleep'?'sleepHr':t+'Min';let value=Number(document.getElementById(id).value);if(!Number.isFinite(value)||value<=0)value=t==='sleep'?8:30;if(t==='study')value=Math.max(30,value);timer[t].base=t==='sleep'?Math.round(value*3600):Math.round(value*60);timer[t].sec=timer[t].base;draw(t)}
+function startTimer(t){setFromInput(t);if(timer[t].run)return;timer[t].run=true;tick(t)}
+function startSleep(){setFromInput('sleep');if(timer.sleep.run)return;timer.sleep.run=true;tick('sleep')}
+function pauseTimer(t){timer[t].run=false}
+function resetTimer(t){timer[t].run=false;timer[t].sec=timer[t].base;draw(t)}
+function tick(t){if(!timer[t].run)return;draw(t);if(timer[t].sec<=0){timer[t].run=false;finish(t);return}timer[t].sec--;setTimeout(()=>tick(t),1000)}
+function finish(t){const name={study:'Study',edit:'Editing',train:'Training',sleep:'Sleep'}[t];toggle(t,true);if(navigator.vibrate)navigator.vibrate([400,200,400,200,700]);if('Notification'in window&&Notification.permission==='granted')new Notification('Daily Quest',{body:name+' timer finished! Quest completed.'});alert('⏰ '+name+' timer finished! Quest completed!')}
+async function requestNotify(){if('Notification'in window){try{const permission=await Notification.requestPermission();alert('Notification permission: '+permission)}catch(e){alert('Native Android notifications will be connected in the next stage.')}}else alert('Native Android notifications will be connected in the next stage.')}
+function resetAll(){if(confirm('Reset ALL Daily Quest data? This cannot be undone.')){localStorage.removeItem(KEY);location.reload()}}
+render();updateOnlineUI();draw('study');draw('edit');draw('train');draw('sleep');
+</script>
+</body>
+</html>
