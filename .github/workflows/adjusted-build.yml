@@ -1,0 +1,201 @@
+name: Build Daily Quest Adjusted APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'Daily_Quest_PhoneBuild.zip'
+
+permissions:
+  contents: write
+
+jobs:
+  build-adjusted:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract Android project
+        run: |
+          rm -rf build_project
+          mkdir -p build_project
+          unzip -o Daily_Quest_PhoneBuild.zip -d build_project
+
+      - name: Apply Daily Quest fantasy UI and native awareness adjustments
+        run: |
+          PROJECT=$(dirname "$(find build_project -name settings.gradle -type f | head -1)")
+          APP="$PROJECT/app/src/main"
+          mkdir -p "$APP/assets/icons"
+          cp Daily_Quest_Web/index.html "$APP/assets/index.html"
+
+          cat > "$APP/assets/icons/swords.svg" <<'SVG'
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+            <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff4c2"/><stop offset=".45" stop-color="#d6a84a"/><stop offset="1" stop-color="#704515"/></linearGradient></defs>
+            <path d="M45 33l82 82-18 18-82-82z" fill="url(#g)" stroke="#2d1a0b" stroke-width="8"/><path d="M211 33l-82 82 18 18 82-82z" fill="url(#g)" stroke="#2d1a0b" stroke-width="8"/>
+            <path d="M91 122l43 43-17 17-43-43zM165 122l-43 43 17 17 43-43z" fill="#7a4b20" stroke="#2d1a0b" stroke-width="7"/>
+            <path d="M118 177l-25 25M138 177l25 25" stroke="#d6a84a" stroke-width="12" stroke-linecap="round"/><circle cx="128" cy="128" r="17" fill="#b9852c" stroke="#2d1a0b" stroke-width="7"/>
+          </svg>
+          SVG
+
+          cat > "$APP/assets/icons/scroll.svg" <<'SVG'
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+            <defs><linearGradient id="p" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#fff0bd"/><stop offset=".55" stop-color="#c99a4b"/><stop offset="1" stop-color="#76501e"/></linearGradient></defs>
+            <path d="M55 54c-18 0-30 13-30 30s12 30 30 30v90c0 18 13 29 30 29h101c-14-9-21-20-21-34V79c0-14 7-25 21-34z" fill="url(#p)" stroke="#3a220e" stroke-width="9"/>
+            <ellipse cx="55" cy="84" rx="28" ry="31" fill="#b77e30" stroke="#3a220e" stroke-width="8"/><path d="M82 94h69M82 119h58M82 144h67M82 169h48" stroke="#704b20" stroke-width="7" stroke-linecap="round"/>
+          </svg>
+          SVG
+
+          cat > "$APP/assets/icons/bell.svg" <<'SVG'
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+            <defs><linearGradient id="b" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff1a8"/><stop offset=".5" stop-color="#e2a92d"/><stop offset="1" stop-color="#75470e"/></linearGradient></defs>
+            <path d="M128 31c-42 0-70 34-70 78v45l-25 31h190l-25-31v-45c0-44-28-78-70-78z" fill="url(#b)" stroke="#39230d" stroke-width="10"/><path d="M101 207c4 17 14 26 27 26s23-9 27-26" fill="none" stroke="#d6a12d" stroke-width="13" stroke-linecap="round"/>
+          </svg>
+          SVG
+
+          cat > "$APP/assets/icons/trophy.svg" <<'SVG'
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+            <defs><linearGradient id="t" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff1a1"/><stop offset=".5" stop-color="#e0a62b"/><stop offset="1" stop-color="#70400e"/></linearGradient></defs>
+            <path d="M75 38h106v62c0 42-24 70-53 70s-53-28-53-70z" fill="url(#t)" stroke="#39230d" stroke-width="9"/><path d="M75 58H40c0 39 17 61 47 63M181 58h35c0 39-17 61-47 63" fill="none" stroke="#c98e25" stroke-width="13" stroke-linecap="round"/><path d="M128 170v38M92 226h72" stroke="#9b6717" stroke-width="16" stroke-linecap="round"/>
+          </svg>
+          SVG
+
+          cat > "$APP/assets/icons/chest.svg" <<'SVG'
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+            <defs><linearGradient id="c" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#b98235"/><stop offset=".55" stop-color="#704018"/><stop offset="1" stop-color="#351b0b"/></linearGradient></defs>
+            <path d="M42 103c0-36 28-62 64-62h44c36 0 64 26 64 62v28H42z" fill="#9a682b" stroke="#2b1609" stroke-width="9"/><path d="M36 116h184v101H36z" fill="url(#c)" stroke="#2b1609" stroke-width="9"/><path d="M128 116v101" stroke="#d29a42" stroke-width="8"/><rect x="112" y="153" width="32" height="42" rx="7" fill="#e1ae3e" stroke="#4b2b0d" stroke-width="7"/>
+          </svg>
+          SVG
+
+          python3 - "$APP/assets/index.html" <<'PY'
+          from pathlib import Path
+          import sys
+          p=Path(sys.argv[1])
+          text=p.read_text(encoding='utf-8')
+
+          fantasy_css=r'''
+          :root{--bg:#080604;--bg2:#15100a;--card:#21170d;--card2:#2b1d10;--card3:#392817;--text:#fff4d6;--muted:#bca989;--accent:#d29a38;--accent2:#8a5a1f;--good:#78b85a;--warn:#e1b84b;--danger:#a64d3f;--border:#5d4327;--shadow:0 14px 38px rgba(0,0,0,.55)}
+          body{background:radial-gradient(circle at 15% 0%,#3a2511 0%,transparent 28%),radial-gradient(circle at 100% 15%,#281a0c 0%,transparent 30%),linear-gradient(160deg,var(--bg),var(--bg2));font-family:Georgia,'Times New Roman',serif}
+          .card{background:linear-gradient(145deg,#2b1d10,#171009);border:1px solid var(--border);box-shadow:inset 0 1px rgba(255,245,210,.07),var(--shadow)}
+          .quest{background:linear-gradient(145deg,#332315,#21150b);border-color:#4c3620}.timerbox{background:#21160b;border-color:#4c3620}.menu-box,.progress-stat{background:#281b0f;border-color:#4c3620}
+          button{background:linear-gradient(145deg,#d8a342,#8d5b20);border:1px solid #e0b85d;box-shadow:inset 0 1px rgba(255,255,255,.22),0 4px 12px #0008;text-shadow:0 1px #39200a}button.secondary{background:linear-gradient(145deg,#5b4328,#302015);border-color:#80623a}button.good{background:linear-gradient(145deg,#6fae55,#3e6e31)}button.danger{background:linear-gradient(145deg,#a45143,#6c2d27)}
+          .bar{background:#171009;border:1px solid #49331d}.fill{background:linear-gradient(90deg,#8c5b20,#e1b84b,#fff0a0)}
+          .pill{background:#3a2817;border:1px solid #654a2a;color:#f5dfad}.title{font-family:Georgia,serif;text-shadow:0 2px 0 #000,0 0 18px #c48b30}.sub,.note,.label{color:var(--muted)}
+          .dq-asset{width:46px;height:46px;object-fit:contain;vertical-align:middle;filter:drop-shadow(0 5px 7px #000b);margin-right:7px}.dq-title-icon{width:54px;height:54px}.dq-heading{display:flex;align-items:center;gap:8px}
+          .dq-menu-icon{width:28px;height:28px;object-fit:contain;vertical-align:middle;margin-right:5px;filter:drop-shadow(0 3px 4px #000b)}
+          '''
+          if 'dq-asset' not in text:
+              text=text.replace('</style>',fantasy_css+'</style>',1)
+
+          replacements={
+            '⚔️ Daily Quest':'<img class="dq-asset dq-title-icon" src="icons/swords.svg" alt=""> Daily Quest',
+            '<h2>🎯 Today\'s Quests</h2>':'<h2 class="dq-heading"><img class="dq-asset" src="icons/scroll.svg" alt=""> Today\'s Quests</h2>',
+            '<h2>⏱️ Quest Timers</h2>':'<h2 class="dq-heading"><img class="dq-asset" src="icons/swords.svg" alt=""> Quest Timers</h2>',
+            '<h2>🤖 AI Companion</h2>':'<h2 class="dq-heading"><img class="dq-asset" src="icons/swords.svg" alt=""> W Speed</h2>',
+            '<h2>💾 Data & Notifications</h2>':'<h2 class="dq-heading"><img class="dq-asset" src="icons/bell.svg" alt=""> Data & Notifications</h2>',
+            '<h2>💰 PC Fund</h2>':'<h2 class="dq-heading"><img class="dq-asset" src="icons/chest.svg" alt=""> PC Fund</h2>',
+            'showCalendar()">🗓️ Calendar':'showCalendar()"><img class="dq-menu-icon" src="icons/scroll.svg" alt=""> Calendar',
+            'showProgress()">📊 Progress':'showProgress()"><img class="dq-menu-icon" src="icons/trophy.svg" alt=""> Progress',
+            'showSettings()">⚙️ Settings':'showSettings()"><img class="dq-menu-icon" src="icons/swords.svg" alt=""> Settings',
+            'showAIInfo()">🤖 AI Companion':'showAIInfo()"><img class="dq-menu-icon" src="icons/swords.svg" alt=""> AI Companion',
+            'requestNotify()">🔔 Enable notifications':'requestNotify()"><img class="dq-menu-icon" src="icons/bell.svg" alt=""> Enable notifications',
+          }
+          for a,b in replacements.items(): text=text.replace(a,b)
+
+          # Replace the old generic emoji profile/companion heading with the crossed-swords visual.
+          text=text.replace('<b>Quest AI:</b>','<b>W Speed:</b>')
+          text=text.replace('Hey! I\'m your quest companion.','Ayo, knight. I\'m W Speed — your quest companion. Complete your quests and keep moving.')
+
+          # Add an Activity Awareness control without requiring it for normal app use.
+          marker='<button class="secondary" onclick="requestNotify()">'
+          if 'requestUsageAccess' not in text:
+              inject='''<button class="secondary" onclick="requestUsageAccess()"><img class="dq-menu-icon" src="icons/swords.svg" alt=""> Activity Awareness</button>'''
+              text=text.replace(marker,inject+marker,1)
+              text=text.replace('</script>',r'''function requestUsageAccess(){if(window.ActivityAwareness){ActivityAwareness.openUsageAccessSettings();}else{alert('Activity Awareness is unavailable in this build.');}}'''+'</script>',1)
+
+          p.write_text(text,encoding='utf-8')
+          PY
+
+          # Replace the activity-awareness implementation with a non-recursive native bridge.
+          MAIN=$(find "$APP/java" -name MainActivity.java -type f | head -1)
+          if [ -n "$MAIN" ]; then
+            python3 - "$MAIN" <<'PY'
+          from pathlib import Path
+          import sys
+          p=Path(sys.argv[1]); t=p.read_text(encoding='utf-8')
+          if 'ACTION_USAGE_ACCESS_SETTINGS' not in t:
+              t=t.replace('import android.os.Bundle;', 'import android.os.Bundle;\n          import android.content.Intent;\n          import android.provider.Settings;')
+              bridge='''\n          public class ActivityAwarenessBridge {\n              @android.webkit.JavascriptInterface\n              public void openUsageAccessSettings() {\n                  runOnUiThread(() -> startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)));\n              }\n          }\n          '''
+              insert='w.addJavascriptInterface(new ActivityAwarenessBridge(), "ActivityAwareness");\n                  '
+              if 'setContentView(w);' in t:
+                  t=t.replace('setContentView(w);',insert+'setContentView(w);',1)
+              pos=t.rfind('\n}')
+              t=t[:pos]+bridge+t[pos:]
+              p.write_text(t,encoding='utf-8')
+          PY
+          fi
+
+          MANIFEST="$APP/AndroidManifest.xml"
+          if ! grep -q 'android.permission.INTERNET' "$MANIFEST"; then
+            sed -i '/<application/i\    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
+          fi
+          if ! grep -q 'android.permission.PACKAGE_USAGE_STATS' "$MANIFEST"; then
+            sed -i '/<application/i\    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />' "$MANIFEST"
+          fi
+          if ! grep -q 'xmlns:tools=' "$MANIFEST"; then
+            sed -i 's#<manifest #<manifest xmlns:tools="http://schemas.android.com/tools" #' "$MANIFEST"
+          fi
+
+      - name: Repack adjusted Android project ZIP
+        run: |
+          PROJECT=$(dirname "$(find build_project -name settings.gradle -type f | head -1)")
+          rm -f Daily_Quest_PhoneBuild.zip
+          cd "$PROJECT"
+          zip -qr "$GITHUB_WORKSPACE/Daily_Quest_PhoneBuild.zip" .
+
+      - name: Commit adjusted project ZIP
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Daily_Quest_PhoneBuild.zip
+          if git diff --cached --quiet; then
+            echo "No project ZIP changes to commit."
+          else
+            git commit -m "Apply Daily Quest fantasy UI and awareness adjustments"
+            git push
+          fi
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Build adjusted APK
+        run: |
+          PROJECT=$(dirname "$(find build_project -name settings.gradle -type f | head -1)")
+          cd "$PROJECT"
+          gradle --no-daemon assembleDebug
+
+      - name: Find APK
+        run: find build_project -name "*.apk" -type f -print
+
+      - name: Upload adjusted APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Daily-Quest-Adjusted-APK
+          path: 'build_project/**/*.apk'
