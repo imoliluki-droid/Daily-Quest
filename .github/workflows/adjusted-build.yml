@@ -2,13 +2,9 @@ name: Build Daily Quest v2 Safely
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths-ignore:
-      - 'Daily_Quest_PhoneBuild.zip'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-v2:
@@ -16,161 +12,31 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Restore the last known good app base
-        run: |
-          set -e
-          git show aa172638907d87e6e23c9be153570601962330c0:Daily_Quest_PhoneBuild.zip > Daily_Quest_PhoneBuild.zip
-          test -s Daily_Quest_PhoneBuild.zip
-
-      - name: Extract Android project
+      - name: Extract current Android project
         run: |
           set -e
           rm -rf build_project
           mkdir -p build_project
           unzip -q Daily_Quest_PhoneBuild.zip -d build_project
-
-      - name: Apply requested fantasy item assets and safe Activity Awareness bridge
-        shell: bash
+      - name: Verify current project before build
         run: |
           set -e
           PROJECT=$(dirname "$(find build_project -name settings.gradle -type f | head -1)")
           APP="$PROJECT/app/src/main"
-          mkdir -p "$APP/assets/icons"
-          cp Daily_Quest_Web/index.html "$APP/assets/index.html"
-          curl -L --fail --retry 3 -o "$APP/assets/w_speed_icon.jpg" "https://images.complex.com/complex/image/upload/c_crop,h_1760,w_2840,x_0,y_0/g_xy_center,x_1415,y_666/v1751915394/sanity-new/Screenshot_2025-07-07_at_15.09.35_cqfwnk"
-
-          cat > "$APP/assets/icons/crossed_swords.svg" <<'SVG'
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><defs><linearGradient id="s" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff"/><stop offset=".22" stop-color="#dce5ef"/><stop offset=".5" stop-color="#71808f"/><stop offset=".72" stop-color="#f7fbff"/><stop offset="1" stop-color="#46525e"/></linearGradient><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff1a6"/><stop offset=".45" stop-color="#d99b2e"/><stop offset="1" stop-color="#75430c"/></linearGradient></defs><path d="M43 25l91 91-18 18-91-91z" fill="url(#s)" stroke="#291b10" stroke-width="9"/><path d="M213 25l-91 91 18 18 91-91z" fill="url(#s)" stroke="#291b10" stroke-width="9"/><path d="M75 117l64 64-17 17-64-64zM181 117l-64 64 17 17 64-64z" fill="#6d431b" stroke="#291b10" stroke-width="8"/><path d="M80 112l-28-22M176 112l28-22" stroke="url(#g)" stroke-width="13" stroke-linecap="round"/><circle cx="128" cy="128" r="17" fill="url(#g)" stroke="#40250d" stroke-width="7"/></svg>
-          SVG
-          cat > "$APP/assets/icons/scroll.svg" <<'SVG'
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><defs><linearGradient id="p" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff2c4"/><stop offset=".35" stop-color="#d8aa58"/><stop offset=".72" stop-color="#9a6425"/><stop offset="1" stop-color="#563313"/></linearGradient></defs><path d="M61 42h124c-17 12-25 27-25 46v89c0 17 9 28 25 37H61c-22 0-36-15-36-36s14-36 36-36z" fill="url(#p)" stroke="#3b240f" stroke-width="9"/><ellipse cx="61" cy="142" rx="31" ry="36" fill="#9b6226" stroke="#3b240f" stroke-width="8"/><path d="M91 86h69M91 113h57M91 140h66M91 167h49" stroke="#704619" stroke-width="7" stroke-linecap="round"/></svg>
-          SVG
-          cat > "$APP/assets/icons/trophy.svg" <<'SVG'
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><defs><linearGradient id="t" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff6ad"/><stop offset=".32" stop-color="#e7b53b"/><stop offset=".7" stop-color="#a56a16"/><stop offset="1" stop-color="#603508"/></linearGradient></defs><path d="M72 39h112v61c0 43-26 71-56 71s-56-28-56-71z" fill="url(#t)" stroke="#3a220b" stroke-width="9"/><path d="M72 60H39c0 38 18 61 49 63M184 60h33c0 38-18 61-49 63" fill="none" stroke="#c58a20" stroke-width="14" stroke-linecap="round"/><path d="M128 171v39M91 228h74" stroke="#855313" stroke-width="16" stroke-linecap="round"/></svg>
-          SVG
-          cat > "$APP/assets/icons/bell.svg" <<'SVG'
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><defs><linearGradient id="b" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff8bc"/><stop offset=".4" stop-color="#e8b33a"/><stop offset=".75" stop-color="#9d6718"/><stop offset="1" stop-color="#5d350b"/></linearGradient></defs><path d="M128 31c-43 0-71 35-71 79v45l-25 31h192l-25-31v-45c0-44-28-79-71-79z" fill="url(#b)" stroke="#38220c" stroke-width="10"/><path d="M100 207c4 17 14 26 28 26s24-9 28-26" fill="none" stroke="#d69c29" stroke-width="14" stroke-linecap="round"/></svg>
-          SVG
-          cat > "$APP/assets/icons/chest.svg" <<'SVG'
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><defs><linearGradient id="c" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#c18a3d"/><stop offset=".38" stop-color="#8a5524"/><stop offset=".72" stop-color="#58300f"/><stop offset="1" stop-color="#2c1608"/></linearGradient></defs><path d="M43 112V91c0-33 28-57 63-57h44c35 0 63 24 63 57v21" fill="#8f5a25" stroke="#2a1609" stroke-width="10"/><path d="M35 112h186v105H35z" fill="url(#c)" stroke="#2a1609" stroke-width="10"/><path d="M128 112v105" stroke="#d39a3a" stroke-width="8"/><rect x="111" y="151" width="34" height="46" rx="7" fill="#e2b241" stroke="#4b2a0c" stroke-width="7"/></svg>
-          SVG
-          cat > "$APP/assets/icons/helm.svg" <<'SVG'
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><defs><linearGradient id="h" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#e8eef3"/><stop offset=".4" stop-color="#7d8b99"/><stop offset=".72" stop-color="#394754"/><stop offset="1" stop-color="#161f27"/></linearGradient></defs><path d="M58 125V91c0-45 29-73 70-73s70 28 70 73v34l-20 75H78z" fill="url(#h)" stroke="#111820" stroke-width="10"/><path d="M65 117h126l-20 31H85z" fill="#26333e" stroke="#0f171e" stroke-width="8"/><path d="M128 18v99" stroke="#d9e3ec" stroke-opacity=".35" stroke-width="9"/></svg>
-          SVG
-
-          python3 - "$APP/assets/index.html" <<'PY'
-          from pathlib import Path
-          import sys
-          p=Path(sys.argv[1]); text=p.read_text(encoding='utf-8')
-          css='<style id="daily-quest-3d-assets">.dq3d{width:44px;height:44px;object-fit:contain;vertical-align:middle;filter:drop-shadow(0 4px 4px rgba(0,0,0,.55));flex:0 0 auto}.dq3d-title{width:48px;height:48px}.dq3d-menu{width:26px;height:26px}.dq3d-quest{width:42px;height:42px}.dq3d-heading{display:flex;align-items:center;gap:8px}.quest{gap:10px}.quest-info{flex:1}</style>'
-          if 'id="daily-quest-3d-assets"' not in text: text=text.replace('</style>',css+'</style>',1)
-          swaps={
-          '<div class="title">⚔️ Daily Quest</div>':'<div class="title"><img class="dq3d dq3d-title" src="icons/crossed_swords.svg" alt=""> Daily Quest</div>',
-          '<h2>🎯 Today\'s Quests</h2>':'<h2 class="dq3d-heading"><img class="dq3d" src="icons/scroll.svg" alt=""> Today\'s Quests</h2>',
-          '<h2>⏱️ Quest Timers</h2>':'<h2 class="dq3d-heading"><img class="dq3d" src="icons/crossed_swords.svg" alt=""> Quest Timers</h2>',
-          '<h2>💰 PC Fund</h2>':'<h2 class="dq3d-heading"><img class="dq3d" src="icons/chest.svg" alt=""> PC Fund</h2>',
-          '<h2>🤖 AI Companion</h2>':'<h2 class="dq3d-heading"><img src="w_speed_icon.jpg" alt="W Speed" style="width:44px;height:44px;border-radius:50%;object-fit:cover;object-position:center 32%;filter:none"> W Speed</h2>',
-          '<h2>💾 Data & Notifications</h2>':'<h2 class="dq3d-heading"><img class="dq3d" src="icons/bell.svg" alt=""> Data & Notifications</h2>',
-          '<button class="secondary" onclick="showCalendar()">🗓️ Calendar</button>':'<button class="secondary" onclick="showCalendar()"><img class="dq3d dq3d-menu" src="icons/scroll.svg" alt=""> Calendar</button>',
-          '<button class="secondary" onclick="showProgress()">📊 Progress</button>':'<button class="secondary" onclick="showProgress()"><img class="dq3d dq3d-menu" src="icons/trophy.svg" alt=""> Progress</button>',
-          '<button class="secondary" onclick="showAIInfo()">🤖 AI Companion</button>':'<button class="secondary" onclick="showAIInfo()"><img class="dq3d dq3d-menu" src="w_speed_icon.jpg" alt="" style="border-radius:50%;object-fit:cover;filter:none"> W Speed</button>',
-          '<button class="secondary" onclick="requestNotify()">🔔 Enable notifications</button>':'<button class="secondary" onclick="requestNotify()"><img class="dq3d dq3d-menu" src="icons/bell.svg" alt=""> Enable notifications</button>',
-          '<b>Quest AI:</b>':'<b>W Speed:</b>'}
-          for a,b in swaps.items(): text=text.replace(a,b)
-          qold="const q=[['college','🎓','College','Attend your scheduled classes','7:00 AM – 12:00 PM'],['study','📚','Study','Complete at least 30 minutes','2:00 PM – 3:00 PM'],['edit','🎬','Editing','Work on an editing project','3:00 PM – 6:00 PM'],['train','🏋️','Training','Complete your workout','5:00 PM – 5:30 PM'],['sleep','😴','Sleep','Get at least 7 hours','10:00 PM – 6:00 AM']];"
-          qnew="const q=[['college','<img class=\"dq3d dq3d-quest\" src=\"icons/helm.svg\" alt=\"\">','College','Attend your scheduled classes','7:00 AM – 12:00 PM'],['study','<img class=\"dq3d dq3d-quest\" src=\"icons/scroll.svg\" alt=\"\">','Study','Complete at least 30 minutes','2:00 PM – 3:00 PM'],['edit','<img class=\"dq3d dq3d-quest\" src=\"icons/crossed_swords.svg\" alt=\"\">','Editing','Work on an editing project','3:00 PM – 6:00 PM'],['train','<img class=\"dq3d dq3d-quest\" src=\"icons/helm.svg\" alt=\"\">','Training','Complete your workout','5:00 PM – 5:30 PM'],['sleep','<img class=\"dq3d dq3d-quest\" src=\"icons/chest.svg\" alt=\"\">','Sleep','Get at least 7 hours','10:00 PM – 6:00 AM']];"
-          text=text.replace(qold,qnew)
-          if 'requestUsageAccess' not in text:
-              marker='<button class="secondary" onclick="requestNotify()">'
-              inject='<button class="secondary" onclick="requestUsageAccess()"><img class="dq3d dq3d-menu" src="icons/crossed_swords.svg" alt=""> Activity Awareness</button>'
-              text=text.replace(marker,inject+marker,1)
-              text=text.replace('</script>','function requestUsageAccess(){if(window.ActivityAwareness){ActivityAwareness.openUsageAccessSettings();}else{alert("Activity Awareness is unavailable in this build.");}}</script>',1)
-          p.write_text(text,encoding='utf-8')
-          PY
-
-          cat > "$APP/java/com/dailyquest/app/MainActivity.java" <<'JAVA'
-          package com.dailyquest.app;
-          import android.Manifest;
-          import android.app.Activity;
-          import android.app.NotificationChannel;
-          import android.app.NotificationManager;
-          import android.content.Intent;
-          import android.content.pm.PackageManager;
-          import android.os.Build;
-          import android.os.Bundle;
-          import android.provider.Settings;
-          import android.webkit.JavascriptInterface;
-          import android.webkit.WebSettings;
-          import android.webkit.WebView;
-          import android.webkit.WebViewClient;
-          public class MainActivity extends Activity {
-              private static final int NOTIFICATION_REQUEST_CODE=1001;
-              private static final String CHANNEL_ID="daily_quest_notifications";
-              private NotificationManager notificationManager;
-              @Override public void onCreate(Bundle state){super.onCreate(state);notificationManager=(NotificationManager)getSystemService(NOTIFICATION_SERVICE);createNotificationChannel();WebView w=new WebView(this);w.setWebViewClient(new WebViewClient());WebSettings s=w.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(true);s.setAllowFileAccess(true);s.setAllowUniversalAccessFromFileURLs(true);w.addJavascriptInterface(new NotificationBridge(),"AndroidNotifications");w.addJavascriptInterface(new ActivityAwarenessBridge(),"ActivityAwareness");w.loadUrl("file:///android_asset/index.html");setContentView(w);}
-              private void createNotificationChannel(){if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.O){NotificationChannel c=new NotificationChannel(CHANNEL_ID,"Daily Quest",NotificationManager.IMPORTANCE_DEFAULT);c.setDescription("Daily Quest reminders and test notifications");notificationManager.createNotificationChannel(c);}}
-              private boolean notificationsAllowed(){return Build.VERSION.SDK_INT<33||checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)==PackageManager.PERMISSION_GRANTED;}
-              private void requestNativeNotificationPermission(){if(Build.VERSION.SDK_INT>=33&&!notificationsAllowed())requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIFICATION_REQUEST_CODE);}
-              private void showTestNotification(){if(!notificationsAllowed()){requestNativeNotificationPermission();return;}android.app.Notification.Builder b=Build.VERSION.SDK_INT>=Build.VERSION_CODES.O?new android.app.Notification.Builder(this,CHANNEL_ID):new android.app.Notification.Builder(this);b.setSmallIcon(android.R.drawable.ic_dialog_info).setContentTitle("Daily Quest").setContentText("Notification system is working!").setAutoCancel(true);notificationManager.notify(1001,b.build());}
-              public class NotificationBridge{@JavascriptInterface public void requestPermission(){runOnUiThread(()->requestNativeNotificationPermission());}@JavascriptInterface public void sendTestNotification(){runOnUiThread(()->showTestNotification());}}
-              public class ActivityAwarenessBridge{@JavascriptInterface public void openUsageAccessSettings(){runOnUiThread(()->startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)));}}
-          }
-          JAVA
-
-          MANIFEST="$APP/AndroidManifest.xml"
-          grep -q 'android.permission.INTERNET' "$MANIFEST" || sed -i '/<application/i\    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
-          grep -q 'android.permission.POST_NOTIFICATIONS' "$MANIFEST" || sed -i '/<application/i\    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "$MANIFEST"
-          grep -q 'android.permission.PACKAGE_USAGE_STATS' "$MANIFEST" || sed -i '/<application/i\    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />' "$MANIFEST"
-          grep -q 'xmlns:tools=' "$MANIFEST" || sed -i 's#<manifest #<manifest xmlns:tools="http://schemas.android.com/tools" #' "$MANIFEST"
-
-      - name: Verify before build
-        run: |
-          set -e
-          PROJECT=$(dirname "$(find build_project -name settings.gradle -type f | head -1)")
-          APP="$PROJECT/app/src/main"
-          for f in crossed_swords scroll trophy bell chest helm; do test -s "$APP/assets/icons/$f.svg"; done
+          test -s "$APP/assets/index.html"
+          test -s "$APP/java/com/dailyquest/app/MainActivity.java"
           grep -q 'W Speed' "$APP/assets/index.html"
-          grep -q 'ActivityAwareness' "$APP/java/com/dailyquest/app/MainActivity.java"
-          grep -q 'ACTION_USAGE_ACCESS_SETTINGS' "$APP/java/com/dailyquest/app/MainActivity.java"
-          ! grep -q 'openUsageSettings(){openUsageSettings()' "$APP/assets/index.html"
-
-      - name: Repack project ZIP
-        run: |
-          set -e
-          PROJECT=$(dirname "$(find build_project -name settings.gradle -type f | head -1)")
-          rm -f Daily_Quest_PhoneBuild.zip
-          cd "$PROJECT"
-          zip -qr "$GITHUB_WORKSPACE/Daily_Quest_PhoneBuild.zip" .
-
-      - name: Commit rebuilt v2 project
-        run: |
-          set -e
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Daily_Quest_PhoneBuild.zip
-          if git diff --cached --quiet; then echo "No ZIP changes"; else git commit -m "Rebuild Daily Quest v2 from known-good base"; git push; fi
-
-      - name: Set up Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '17'
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.10.2'
+          grep -q 'android.permission.INTERNET' "$APP/AndroidManifest.xml"
+          echo "Using the current repository ZIP; no older commit is restored."
       - name: Build v2 APK
         run: |
           set -e
           PROJECT=$(dirname "$(find build_project -name settings.gradle -type f | head -1)")
           cd "$PROJECT"
-          gradle assembleDebug --no-daemon
+          gradle --no-daemon assembleDebug
       - name: Upload v2 APK
         uses: actions/upload-artifact@v4
         with:
           name: Daily-Quest-APK-v2
-          path: '**/app/build/outputs/apk/debug/*.apk'
+          path: 'build_project/**/*.apk'
           if-no-files-found: error
