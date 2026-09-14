@@ -5,6 +5,11 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - 'Daily_Quest_PhoneBuild.zip'
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -16,9 +21,38 @@ jobs:
 
       - name: Extract Android project
         run: |
-          unzip -o Daily_Quest_PhoneBuild.zip
+          rm -rf build_project
+          mkdir -p build_project
+          unzip -o Daily_Quest_PhoneBuild.zip -d build_project
           echo "Extracted files:"
-          find . -maxdepth 4 -type f | head -100
+          find build_project -maxdepth 6 -type f | head -100
+
+      - name: Apply latest Daily Quest HTML
+        run: |
+          PROJECT=$(dirname "$(find build_project -name settings.gradle -type f | head -1)")
+          mkdir -p "$PROJECT/app/src/main/assets"
+          cp Daily_Quest_Web/index.html "$PROJECT/app/src/main/assets/index.html"
+          echo "Updated HTML: $PROJECT/app/src/main/assets/index.html"
+
+      - name: Repack updated Android project ZIP
+        run: |
+          PROJECT=$(dirname "$(find build_project -name settings.gradle -type f | head -1)")
+          rm -f Daily_Quest_PhoneBuild.zip
+          cd "$PROJECT"
+          zip -qr "$GITHUB_WORKSPACE/Daily_Quest_PhoneBuild.zip" .
+          echo "Updated ZIP created."
+
+      - name: Commit updated project ZIP
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Daily_Quest_PhoneBuild.zip
+          if git diff --cached --quiet; then
+            echo "No ZIP changes to commit."
+          else
+            git commit -m "Update Daily Quest Android project with latest HTML"
+            git push
+          fi
 
       - name: Set up Java
         uses: actions/setup-java@v5
@@ -38,15 +72,9 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
-      - name: Find project folder
-        run: |
-          echo "Searching for Android project..."
-          find . -name settings.gradle -type f -print
-          find . -name settings.gradle.kts -type f -print
-
       - name: Build APK
         run: |
-          PROJECT=$(dirname "$(find . -name settings.gradle -type f | head -1)")
+          PROJECT=$(dirname "$(find build_project -name settings.gradle -type f | head -1)")
           echo "Project found at: $PROJECT"
           cd "$PROJECT"
           gradle --no-daemon assembleDebug
@@ -54,10 +82,10 @@ jobs:
       - name: Find APK
         run: |
           echo "Searching for APK..."
-          find . -name "*.apk" -type f -print
+          find build_project -name "*.apk" -type f -print
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Daily-Quest-APK
-          path: '**/*.apk'
+          path: 'build_project/**/*.apk'
