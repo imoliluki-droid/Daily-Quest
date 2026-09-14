@@ -48,7 +48,6 @@ jobs:
           import android.content.Context;
           import android.content.Intent;
           import android.content.pm.PackageManager;
-          import android.net.Uri;
           import android.os.Build;
           import android.os.Bundle;
           import android.provider.Settings;
@@ -110,7 +109,13 @@ jobs:
               }
 
               private void openUsageSettings(){
-                  try{startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS));}catch(Exception e){startActivity(new Intent(Settings.ACTION_SETTINGS));}
+                  try {
+                      Intent intent=new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
+                      intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                      startActivity(intent);
+                  } catch(Exception e) {
+                      try { startActivity(new Intent(Settings.ACTION_SETTINGS)); } catch(Exception ignored) {}
+                  }
               }
 
               private boolean usageAccessGranted(){
@@ -129,11 +134,19 @@ jobs:
               }
 
               public class NotificationBridge {
-                  @JavascriptInterface public void requestPermission(){runOnUiThread(()->requestNotificationPermission());}
-                  @JavascriptInterface public void sendWspeedNotification(String title,String body){runOnUiThread(()->notifyNow(title,body));}
-                  @JavascriptInterface public void sendTestNotification(){runOnUiThread(()->notifyNow("⚔️ Daily Quest","Notification system is working. Try not to ignore it, bum."));}
-                  @JavascriptInterface public void scheduleNotification(String title,String body,long delayMs){runOnUiThread(()->scheduleNotification(title,body,delayMs));}
-                  @JavascriptInterface public void openUsageSettings(){runOnUiThread(()->openUsageSettings());}
+                  @JavascriptInterface public void requestPermission(){runOnUiThread(() -> requestNotificationPermission());}
+                  @JavascriptInterface public void sendWspeedNotification(String title,String body){runOnUiThread(() -> notifyNow(title,body));}
+                  @JavascriptInterface public void sendTestNotification(){runOnUiThread(() -> notifyNow("⚔️ Daily Quest","Notification system is working. Try not to ignore it, bum."));}
+                  @JavascriptInterface public void scheduleNotification(String title,String body,long delayMs){runOnUiThread(() -> scheduleNotification(title,body,delayMs));}
+                  @JavascriptInterface public void openUsageSettings(){
+                      try {
+                          Intent intent=new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
+                          intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                          startActivity(intent);
+                      } catch(Exception e) {
+                          try { startActivity(new Intent(Settings.ACTION_SETTINGS)); } catch(Exception ignored) {}
+                      }
+                  }
                   @JavascriptInterface public boolean hasUsageAccess(){return usageAccessGranted();}
                   @JavascriptInterface public String getUsageSummary(){return usageSummary();}
               }
@@ -164,6 +177,64 @@ jobs:
               }
           }
           JAVA
+
+          # Restore the W Speed profile, add an explicit Online Mode control,
+          # add required quest descriptions, and patch the activity-awareness bridge.
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("$APP/assets/index.html")
+          text=p.read_text()
+
+          text=text.replace(
+              '<button class="ghost" onclick="toggleMenu();requestUsage()">📱 Activity awareness</button>',
+              '<button id="onlineModeBtn" class="ghost" onclick="toggleOnlineMode()">🌐 Online Mode: OFF</button><button class="ghost" onclick="toggleMenu();openWSpeedProfile()">⚔ W Speed Profile</button><button class="ghost" onclick="toggleMenu();requestUsage()">📱 Activity awareness</button>'
+          )
+
+          text=text.replace(
+              '<input id="qeSchedule" placeholder="Schedule e.g. Mon/Wed/Fri 7 PM"><button class="gold" onclick="createQuest()">Create quest</button>',
+              '<input id="qeSchedule" placeholder="Schedule e.g. Mon/Wed/Fri 7 PM"><textarea id="qeDesc" rows="3" placeholder="Quest description — what exactly do you need to do?"></textarea><button class="gold" onclick="createQuest()">Create quest</button>'
+          )
+
+          text=text.replace(
+              '<div class="qmain"><div class="qname">${esc(q.name)}</div><div class="qmeta">${esc(q.category)} • ${esc(q.schedule)} • +${q.xp||25} XP</div></div>',
+              '<div class="qmain"><div class="qname">${esc(q.name)}</div><div class="qmeta">${esc(q.category)} • ${esc(q.schedule)} • +${q.xp||25} XP</div>${q.description?`<div class="note">${esc(q.description)}</div>`:""}</div>'
+          )
+
+          text=text.replace(
+              "s.quests.push({id:'q_'+Date.now(),name:n,category:document.getElementById('qeCat').value,schedule:document.getElementById('qeSchedule').value.trim()||'Flexible',xp:Number(document.getElementById('qeXp').value)||50,done:false});",
+              "const desc=document.getElementById('qeDesc').value.trim();if(!desc)return toast('Every quest needs a description. Tell W Speed what actually has to be done.');s.quests.push({id:'q_'+Date.now(),name:n,description:desc,category:document.getElementById('qeCat').value,schedule:document.getElementById('qeSchedule').value.trim()||'Flexible',xp:Number(document.getElementById('qeXp').value)||50,done:false});"
+          )
+
+          old="<input id=\"es\" value=\"${esc(q.schedule)}\"><div class=\"actions\"><button class=\"gold\" onclick=\"saveEdit('${id}')\">Save</button>"
+          new="<input id=\"es\" value=\"${esc(q.schedule)}\"><textarea id=\"edesc\" rows=\"3\" placeholder=\"Quest description\">${esc(q.description||'')}</textarea><div class=\"actions\"><button class=\"gold\" onclick=\"saveEdit('${id}')\">Save</button>"
+          text=text.replace(old,new)
+
+          text=text.replace(
+              "q.category=document.getElementById('ec').value;q.xp=Number(document.getElementById('ex').value)||50;q.schedule=document.getElementById('es').value.trim()||'Flexible';save();",
+              "q.category=document.getElementById('ec').value;q.xp=Number(document.getElementById('ex').value)||50;q.schedule=document.getElementById('es').value.trim()||'Flexible';q.description=document.getElementById('edesc').value.trim();if(!q.description)return toast('A quest description is required.');save();"
+          )
+
+          text=text.replace(
+              "function questContext(){return {date:today(),streak:s.streak,xp:s.xp,level:Math.floor(s.xp/500)+1,quests:s.quests.map(q=>({name:q.name,category:q.category,schedule:q.schedule,done:!!q.done,xp:q.xp})),recentCompleted:Object.keys(s.claimed).slice(-12)}}",
+              "function questContext(){return {date:today(),streak:s.streak,xp:s.xp,level:Math.floor(s.xp/500)+1,quests:s.quests.map(q=>({name:q.name,description:q.description||'',category:q.category,schedule:q.schedule,done:!!q.done,xp:q.xp})),recentCompleted:Object.keys(s.claimed).slice(-12)}}"
+          )
+
+          marker="function openSettings(){openModal(`"
+          profile="function openWSpeedProfile(){openModal(`<div style=\"text-align:center\"><img src=\"w_speed_icon.jpg\" style=\"width:120px;height:120px;object-fit:cover;border-radius:24px;border:1px solid #b9914d88;box-shadow:0 15px 45px #0008\"><h2 style=\"margin-bottom:4px\">W Speed</h2><div class=\"eyebrow\">THE KNIGHT OF REALITY</div><p class=\"note\">Your personal quest companion. Blunt, chaotic, protective, and genuinely on your side.</p></div><div class=\"card\" style=\"margin-top:12px\"><b>Personality</b><p class=\"note\">Modern Gen-Z speech by default, occasional medieval outrage for comedy, aggressive support, fresh jokes, and no fake answers. Truth comes before the roast.</p></div><div class=\"actions\" style=\"margin-top:12px\"><button class=\"gold\" onclick=\"closeModal()\">Back to questing</button></div>`)}\n"
+          if marker in text and 'function openWSpeedProfile()' not in text:
+              text=text.replace(marker,profile+marker)
+
+          # Add Online Mode state and gate the AI request behind the user-facing toggle.
+          text=text.replace("let s=JSON.parse(localStorage.getItem(KEY)||'null')||{xp:0,streak:0,quests:[],days:{},claimed:{},achievements:{},saved:0,goal:4000,filter:'all'};", "let s=JSON.parse(localStorage.getItem(KEY)||'null')||{xp:0,streak:0,quests:[],days:{},claimed:{},achievements:{},saved:0,goal:4000,filter:'all',onlineMode:false};if(typeof s.onlineMode!=='boolean')s.onlineMode=false;")
+          text=text.replace("function toggleMenu(){document.getElementById('menu').classList.toggle('show')}", "function toggleMenu(){document.getElementById('menu').classList.toggle('show')}\nfunction toggleOnlineMode(){s.onlineMode=!s.onlineMode;save();updateOnlineModeUI();if(s.onlineMode){toast('Online Mode enabled. W Speed is ready.')}else toast('Online Mode disabled. W Speed will stay quiet.')}\nfunction updateOnlineModeUI(){const b=document.getElementById('onlineModeBtn'),st=document.getElementById('aiStatus');if(b)b.textContent='🌐 Online Mode: '+(s.onlineMode?'ON':'OFF');if(st)st.textContent=s.onlineMode?'online mode ready':'online mode off';}")
+          text=text.replace("async function sendAI(){const input=document.getElementById('chatInput'),msg=input.value.trim();if(!msg)return;", "async function sendAI(){const input=document.getElementById('chatInput'),msg=input.value.trim();if(!msg)return;if(!s.onlineMode){addMsg('ai','Online Mode is OFF. Open the menu and turn it on first, bro.');return;}")
+          text=text.replace("renderQuests();renderAchievements();save();", "renderQuests();renderAchievements();updateOnlineModeUI();save();")
+
+          # Existing default quests get descriptions on first run/migration.
+          text=text.replace("function save(){localStorage.setItem(KEY,JSON.stringify(s))}", "function save(){localStorage.setItem(KEY,JSON.stringify(s))}\ns.quests.forEach(q=>{if(!q.description)q.description='Complete this quest according to its schedule and category.'});")
+
+          p.write_text(text)
+          PY
 
           MANIFEST="$APP/AndroidManifest.xml"
           grep -q 'android.permission.INTERNET' "$MANIFEST" || sed -i '/<application/i\    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
