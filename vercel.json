@@ -3,5 +3,6 @@
   "framework": null,
   "functions": {
     "api/**/*.js": {}
-  }
+  },
+  "alias": ["daily-quest-z4df.vercel.app"]
 }
