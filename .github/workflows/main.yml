@@ -115,6 +115,9 @@ jobs:
                   s.setJavaScriptEnabled(true);
                   s.setDomStorageEnabled(true);
                   s.setAllowFileAccess(true);
+                  // The app UI is bundled locally as a trusted file:// asset and calls only HTTPS APIs.
+                  // This is required for the W Speed web fetch to leave the Android WebView.
+                  s.setAllowUniversalAccessFromFileURLs(true);
                   w.addJavascriptInterface(new NotificationBridge(), "AndroidNotifications");
                   w.loadUrl("file:///android_asset/index.html");
                   setContentView(w);
@@ -173,6 +176,10 @@ jobs:
           JAVA
 
           MANIFEST="$APP/AndroidManifest.xml"
+          # W Speed uses HTTPS from the WebView, so the APK must declare Android's INTERNET permission.
+          if ! grep -q 'android.permission.INTERNET' "$MANIFEST"; then
+            sed -i '/<application/i\    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
+          fi
           if ! grep -q 'android.permission.POST_NOTIFICATIONS' "$MANIFEST"; then
             sed -i '/<application/i\    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "$MANIFEST"
           fi
