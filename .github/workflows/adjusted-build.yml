@@ -1,4 +1,4 @@
-name: Build Daily Quest Adjusted APK
+name: Build Daily Quest v2 Safely
 
 on:
   workflow_dispatch:
@@ -11,20 +11,26 @@ permissions:
   contents: write
 
 jobs:
-  build-adjusted:
+  build-v2:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Restore the last known good app base
+        run: |
+          set -e
+          git show aa172638907d87e6e23c9be153570601962330c0:Daily_Quest_PhoneBuild.zip > Daily_Quest_PhoneBuild.zip
+          test -s Daily_Quest_PhoneBuild.zip
 
       - name: Extract Android project
         run: |
           set -e
           rm -rf build_project
           mkdir -p build_project
-          unzip -o Daily_Quest_PhoneBuild.zip -d build_project
+          unzip -q Daily_Quest_PhoneBuild.zip -d build_project
 
-      - name: Apply requested 3D item assets and safe Activity Awareness bridge
+      - name: Apply requested fantasy item assets and safe Activity Awareness bridge
         shell: bash
         run: |
           set -e
@@ -32,7 +38,6 @@ jobs:
           APP="$PROJECT/app/src/main"
           mkdir -p "$APP/assets/icons"
           cp Daily_Quest_Web/index.html "$APP/assets/index.html"
-
           curl -L --fail --retry 3 -o "$APP/assets/w_speed_icon.jpg" "https://images.complex.com/complex/image/upload/c_crop,h_1760,w_2840,x_0,y_0/g_xy_center,x_1415,y_666/v1751915394/sanity-new/Screenshot_2025-07-07_at_15.09.35_cqfwnk"
 
           cat > "$APP/assets/icons/crossed_swords.svg" <<'SVG'
@@ -57,8 +62,7 @@ jobs:
           python3 - "$APP/assets/index.html" <<'PY'
           from pathlib import Path
           import sys
-          p=Path(sys.argv[1])
-          text=p.read_text(encoding='utf-8')
+          p=Path(sys.argv[1]); text=p.read_text(encoding='utf-8')
           css='<style id="daily-quest-3d-assets">.dq3d{width:44px;height:44px;object-fit:contain;vertical-align:middle;filter:drop-shadow(0 4px 4px rgba(0,0,0,.55));flex:0 0 auto}.dq3d-title{width:48px;height:48px}.dq3d-menu{width:26px;height:26px}.dq3d-quest{width:42px;height:42px}.dq3d-heading{display:flex;align-items:center;gap:8px}.quest{gap:10px}.quest-info{flex:1}</style>'
           if 'id="daily-quest-3d-assets"' not in text: text=text.replace('</style>',css+'</style>',1)
           swaps={
@@ -66,7 +70,7 @@ jobs:
           '<h2>🎯 Today\'s Quests</h2>':'<h2 class="dq3d-heading"><img class="dq3d" src="icons/scroll.svg" alt=""> Today\'s Quests</h2>',
           '<h2>⏱️ Quest Timers</h2>':'<h2 class="dq3d-heading"><img class="dq3d" src="icons/crossed_swords.svg" alt=""> Quest Timers</h2>',
           '<h2>💰 PC Fund</h2>':'<h2 class="dq3d-heading"><img class="dq3d" src="icons/chest.svg" alt=""> PC Fund</h2>',
-          '<h2>🤖 AI Companion</h2>':'<h2 class="dq3d-heading"><img class="dq3d" src="w_speed_icon.jpg" alt="W Speed" style="width:44px;height:44px;border-radius:50%;object-fit:cover;object-position:center 32%;filter:none"> W Speed</h2>',
+          '<h2>🤖 AI Companion</h2>':'<h2 class="dq3d-heading"><img src="w_speed_icon.jpg" alt="W Speed" style="width:44px;height:44px;border-radius:50%;object-fit:cover;object-position:center 32%;filter:none"> W Speed</h2>',
           '<h2>💾 Data & Notifications</h2>':'<h2 class="dq3d-heading"><img class="dq3d" src="icons/bell.svg" alt=""> Data & Notifications</h2>',
           '<button class="secondary" onclick="showCalendar()">🗓️ Calendar</button>':'<button class="secondary" onclick="showCalendar()"><img class="dq3d dq3d-menu" src="icons/scroll.svg" alt=""> Calendar</button>',
           '<button class="secondary" onclick="showProgress()">📊 Progress</button>':'<button class="secondary" onclick="showProgress()"><img class="dq3d dq3d-menu" src="icons/trophy.svg" alt=""> Progress</button>',
@@ -108,7 +112,7 @@ jobs:
               private void createNotificationChannel(){if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.O){NotificationChannel c=new NotificationChannel(CHANNEL_ID,"Daily Quest",NotificationManager.IMPORTANCE_DEFAULT);c.setDescription("Daily Quest reminders and test notifications");notificationManager.createNotificationChannel(c);}}
               private boolean notificationsAllowed(){return Build.VERSION.SDK_INT<33||checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)==PackageManager.PERMISSION_GRANTED;}
               private void requestNativeNotificationPermission(){if(Build.VERSION.SDK_INT>=33&&!notificationsAllowed())requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIFICATION_REQUEST_CODE);}
-              private void showTestNotification(){if(!notificationsAllowed()){requestNativeNotificationPermission();return;}android.app.Notification.Builder b=Build.VERSION.SDK_INT>=Build.VERSION_CODES.O?new android.app.Notification.Builder(this,CHANNEL_ID):new android.app.Notification.Builder(this);b.setSmallIcon(android.R.drawable.ic_dialog_info).setContentTitle("⚔️ Daily Quest").setContentText("Notification system is working!").setAutoCancel(true);notificationManager.notify(1001,b.build());}
+              private void showTestNotification(){if(!notificationsAllowed()){requestNativeNotificationPermission();return;}android.app.Notification.Builder b=Build.VERSION.SDK_INT>=Build.VERSION_CODES.O?new android.app.Notification.Builder(this,CHANNEL_ID):new android.app.Notification.Builder(this);b.setSmallIcon(android.R.drawable.ic_dialog_info).setContentTitle("Daily Quest").setContentText("Notification system is working!").setAutoCancel(true);notificationManager.notify(1001,b.build());}
               public class NotificationBridge{@JavascriptInterface public void requestPermission(){runOnUiThread(()->requestNativeNotificationPermission());}@JavascriptInterface public void sendTestNotification(){runOnUiThread(()->showTestNotification());}}
               public class ActivityAwarenessBridge{@JavascriptInterface public void openUsageAccessSettings(){runOnUiThread(()->startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)));}}
           }
@@ -120,6 +124,17 @@ jobs:
           grep -q 'android.permission.PACKAGE_USAGE_STATS' "$MANIFEST" || sed -i '/<application/i\    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />' "$MANIFEST"
           grep -q 'xmlns:tools=' "$MANIFEST" || sed -i 's#<manifest #<manifest xmlns:tools="http://schemas.android.com/tools" #' "$MANIFEST"
 
+      - name: Verify before build
+        run: |
+          set -e
+          PROJECT=$(dirname "$(find build_project -name settings.gradle -type f | head -1)")
+          APP="$PROJECT/app/src/main"
+          for f in crossed_swords scroll trophy bell chest helm; do test -s "$APP/assets/icons/$f.svg"; done
+          grep -q 'W Speed' "$APP/assets/index.html"
+          grep -q 'ActivityAwareness' "$APP/java/com/dailyquest/app/MainActivity.java"
+          grep -q 'ACTION_USAGE_ACCESS_SETTINGS' "$APP/java/com/dailyquest/app/MainActivity.java"
+          ! grep -q 'openUsageSettings(){openUsageSettings()' "$APP/assets/index.html"
+
       - name: Repack project ZIP
         run: |
           set -e
@@ -128,12 +143,13 @@ jobs:
           cd "$PROJECT"
           zip -qr "$GITHUB_WORKSPACE/Daily_Quest_PhoneBuild.zip" .
 
-      - name: Commit adjusted project
+      - name: Commit rebuilt v2 project
         run: |
+          set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add Daily_Quest_PhoneBuild.zip
-          if git diff --cached --quiet; then echo "No ZIP changes"; else git commit -m "Redo Daily Quest 3D item assets and awareness bridge"; git push; fi
+          if git diff --cached --quiet; then echo "No ZIP changes"; else git commit -m "Rebuild Daily Quest v2 from known-good base"; git push; fi
 
       - name: Set up Java
         uses: actions/setup-java@v5
@@ -146,15 +162,15 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
-      - name: Build adjusted APK
+      - name: Build v2 APK
         run: |
           set -e
           PROJECT=$(dirname "$(find build_project -name settings.gradle -type f | head -1)")
           cd "$PROJECT"
           gradle assembleDebug --no-daemon
-      - name: Upload adjusted APK
+      - name: Upload v2 APK
         uses: actions/upload-artifact@v4
         with:
-          name: Daily-Quest-APK-Adjusted
+          name: Daily-Quest-APK-v2
           path: '**/app/build/outputs/apk/debug/*.apk'
           if-no-files-found: error
