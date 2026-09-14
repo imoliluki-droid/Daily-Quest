@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - v2-build
     paths-ignore:
       - 'Daily_Quest_PhoneBuild.zip'
 
@@ -14,7 +15,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -25,170 +25,151 @@ jobs:
           mkdir -p build_project
           unzip -o Daily_Quest_PhoneBuild.zip -d build_project
 
-      - name: Apply native notifications and W Speed icon
+      - name: Apply Daily Quest v2 Android layer
         run: |
           PROJECT=$(dirname "$(find build_project -name settings.gradle -type f | head -1)")
           APP="$PROJECT/app/src/main"
-          mkdir -p "$APP/assets"
+          mkdir -p "$APP/assets" "$APP/java/com/dailyquest/app"
           cp Daily_Quest_Web/index.html "$APP/assets/index.html"
 
-          # W Speed icon: a real IShowSpeed portrait in Roman warrior armor from his Croatia stream.
           curl -L --fail --retry 3 -o "$APP/assets/w_speed_icon.jpg" "https://images.complex.com/complex/image/upload/c_crop,h_1760,w_2840,x_0,y_0/g_xy_center,x_1415,y_666/v1751915394/sanity-new/Screenshot_2025-07-07_at_15.09.35_cqfwnk"
-
-          python3 - "$APP/assets/index.html" <<'PY'
-          from pathlib import Path
-          p = Path(__import__('sys').argv[1])
-          text = p.read_text(encoding='utf-8')
-
-          if 'sendTestNotification()' not in text:
-              marker = '</script>'
-              additions = '''
-          function requestNotify(){
-            if(window.AndroidNotifications){
-              AndroidNotifications.requestPermission();
-            } else if('Notification' in window){
-              Notification.requestPermission();
-            } else {
-              alert('Native Android notifications are unavailable.');
-            }
-          }
-          function sendTestNotification(){
-            if(window.AndroidNotifications){
-              AndroidNotifications.sendTestNotification();
-            } else if('Notification' in window && Notification.permission==='granted'){
-              new Notification('⚔️ Daily Quest',{body:'Notification system is working!'});
-            } else {
-              alert('Enable notifications first.');
-            }
-          }
-          '''
-              text = text.replace(marker, additions + marker, 1)
-
-          old = '<button class="secondary" onclick="requestNotify()">🔔 Enable notifications</button><button class="danger" onclick="resetAll()">Reset all data</button>'
-          new = '<button class="secondary" onclick="requestNotify()">🔔 Enable notifications</button><button class="good" onclick="sendTestNotification()">📲 Send test notification</button><button class="danger" onclick="resetAll()">Reset all data</button>'
-          if old in text:
-              text = text.replace(old, new, 1)
-
-          css = '.wspeed-title{display:flex;align-items:center;gap:10px}.wspeed-avatar{width:48px;height:48px;border-radius:50%;object-fit:cover;object-position:center 32%;border:2px solid #8b7cff;box-shadow:0 0 0 3px #111722,0 6px 18px #0008;flex-shrink:0}'
-          if '.wspeed-avatar{' not in text:
-              text = text.replace('</style>', css + '</style>', 1)
-
-          old_heading = '<h2>🤖 AI Companion</h2>'
-          new_heading = '<h2 class="wspeed-title"><img class="wspeed-avatar" src="w_speed_icon.jpg" alt="W Speed"><span>⚔️ W Speed</span></h2>'
-          if old_heading in text:
-              text = text.replace(old_heading, new_heading, 1)
-
-          text = text.replace('<b>Quest AI:</b>', '<b>W Speed:</b>')
-          text = text.replace('Hey! I\'m your quest companion.', 'Ayo, knight. I\'m W Speed. Your quest companion—and the bastard who will remind you when you\'re slacking.')
-
-          # Diagnostic mode: expose the exact browser/network failure instead of hiding it behind the generic message.
-          marker = "ai.innerHTML='<b>W Speed:</b> My connection to the realm failed for a moment. Try again.'"
-          diagnostic = "ai.innerHTML='<b>W Speed:</b> Connection diagnostic: '+escapeHTML(e&&e.message?e.message:String(e))+'<br><span class=\"note\">If Render shows no request, the APK request did not reach the backend.</span>'"
-          if marker in text and 'Connection diagnostic:' not in text:
-              text = text.replace(marker, diagnostic, 1)
-
-          p.write_text(text, encoding='utf-8')
-          PY
 
           cat > "$APP/java/com/dailyquest/app/MainActivity.java" <<'JAVA'
           package com.dailyquest.app;
 
           import android.Manifest;
           import android.app.Activity;
+          import android.app.AlarmManager;
           import android.app.NotificationChannel;
           import android.app.NotificationManager;
+          import android.app.PendingIntent;
+          import android.app.usage.UsageStats;
+          import android.app.usage.UsageStatsManager;
+          import android.content.Context;
+          import android.content.Intent;
           import android.content.pm.PackageManager;
+          import android.net.Uri;
           import android.os.Build;
           import android.os.Bundle;
+          import android.provider.Settings;
           import android.webkit.JavascriptInterface;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
+          import org.json.JSONArray;
+          import org.json.JSONObject;
+          import java.util.Calendar;
+          import java.util.List;
 
           public class MainActivity extends Activity {
+              public static final String CHANNEL_ID = "daily_quest_notifications";
               private static final int NOTIFICATION_REQUEST_CODE = 1001;
-              private static final String CHANNEL_ID = "daily_quest_notifications";
               private NotificationManager notificationManager;
 
               @Override public void onCreate(Bundle state) {
                   super.onCreate(state);
-                  notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                  notificationManager=(NotificationManager)getSystemService(NOTIFICATION_SERVICE);
                   createNotificationChannel();
-
-                  WebView w = new WebView(this);
+                  WebView w=new WebView(this);
                   w.setWebViewClient(new WebViewClient());
-                  WebSettings s = w.getSettings();
+                  WebSettings s=w.getSettings();
                   s.setJavaScriptEnabled(true);
                   s.setDomStorageEnabled(true);
                   s.setAllowFileAccess(true);
-                  // The app UI is bundled locally as a trusted file:// asset and calls only HTTPS APIs.
-                  // This is required for the W Speed web fetch to leave the Android WebView.
                   s.setAllowUniversalAccessFromFileURLs(true);
-                  w.addJavascriptInterface(new NotificationBridge(), "AndroidNotifications");
+                  w.addJavascriptInterface(new NotificationBridge(),"AndroidNotifications");
                   w.loadUrl("file:///android_asset/index.html");
                   setContentView(w);
               }
 
-              private void createNotificationChannel() {
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                      NotificationChannel channel = new NotificationChannel(
-                          CHANNEL_ID, "Daily Quest", NotificationManager.IMPORTANCE_DEFAULT);
-                      channel.setDescription("Daily Quest reminders and test notifications");
-                      notificationManager.createNotificationChannel(channel);
+              private void createNotificationChannel(){
+                  if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.O){
+                      NotificationChannel c=new NotificationChannel(CHANNEL_ID,"Daily Quest",NotificationManager.IMPORTANCE_DEFAULT);
+                      c.setDescription("W Speed reminders, quests, achievements and phone pings");
+                      notificationManager.createNotificationChannel(c);
                   }
               }
+              private boolean notificationsAllowed(){return Build.VERSION.SDK_INT<33||checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)==PackageManager.PERMISSION_GRANTED;}
+              private void requestNotificationPermission(){if(Build.VERSION.SDK_INT>=33&&!notificationsAllowed())requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIFICATION_REQUEST_CODE);}
 
-              private boolean notificationsAllowed() {
-                  return Build.VERSION.SDK_INT < 33 ||
-                      checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
+              private void notifyNow(String title,String body){
+                  if(!notificationsAllowed()){requestNotificationPermission();return;}
+                  NotificationManager nm=notificationManager;
+                  android.app.Notification.Builder b=Build.VERSION.SDK_INT>=26?new android.app.Notification.Builder(this,CHANNEL_ID):new android.app.Notification.Builder(this);
+                  b.setSmallIcon(android.R.drawable.ic_dialog_info).setContentTitle(title).setContentText(body).setAutoCancel(true);
+                  nm.notify((int)(System.currentTimeMillis()%100000),b.build());
               }
 
-              private void requestNativeNotificationPermission() {
-                  if (Build.VERSION.SDK_INT >= 33 && !notificationsAllowed()) {
-                      requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, NOTIFICATION_REQUEST_CODE);
-                  }
+              private void scheduleNotification(String title,String body,long delayMs){
+                  if(!notificationsAllowed()){requestNotificationPermission();return;}
+                  long trigger=System.currentTimeMillis()+Math.max(1000,delayMs);
+                  Intent i=new Intent(this,AlarmReceiver.class).putExtra("title",title).putExtra("body",body);
+                  PendingIntent pi=PendingIntent.getBroadcast(this,(int)(trigger%100000),i,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+                  AlarmManager am=(AlarmManager)getSystemService(ALARM_SERVICE);
+                  if(am!=null)am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,trigger,pi);
               }
 
-              private void showTestNotification() {
-                  if (!notificationsAllowed()) {
-                      requestNativeNotificationPermission();
-                      return;
-                  }
-                  android.app.Notification.Builder builder;
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                      builder = new android.app.Notification.Builder(this, CHANNEL_ID);
-                  } else {
-                      builder = new android.app.Notification.Builder(this);
-                  }
-                  builder.setSmallIcon(android.R.drawable.ic_dialog_info)
-                         .setContentTitle("⚔️ Daily Quest")
-                         .setContentText("Notification system is working!")
-                         .setAutoCancel(true);
-                  notificationManager.notify(1001, builder.build());
+              private void openUsageSettings(){
+                  try{startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS));}catch(Exception e){startActivity(new Intent(Settings.ACTION_SETTINGS));}
+              }
+
+              private boolean usageAccessGranted(){
+                  try{UsageStatsManager u=(UsageStatsManager)getSystemService(USAGE_STATS_SERVICE);long now=System.currentTimeMillis();List<UsageStats> x=u.queryUsageStats(UsageStatsManager.INTERVAL_DAILY,now-60000,now);return x!=null&&!x.isEmpty();}catch(Exception e){return false;}
+              }
+
+              private String usageSummary(){
+                  JSONArray arr=new JSONArray();
+                  try{
+                      UsageStatsManager u=(UsageStatsManager)getSystemService(USAGE_STATS_SERVICE);
+                      Calendar c=Calendar.getInstance();c.set(Calendar.HOUR_OF_DAY,0);c.set(Calendar.MINUTE,0);c.set(Calendar.SECOND,0);c.set(Calendar.MILLISECOND,0);
+                      List<UsageStats> list=u.queryUsageStats(UsageStatsManager.INTERVAL_DAILY,c.getTimeInMillis(),System.currentTimeMillis());
+                      if(list!=null)for(UsageStats x:list){if(x.getTotalTimeInForeground()<=0)continue;JSONObject o=new JSONObject();o.put("package",x.getPackageName());o.put("minutes",x.getTotalTimeInForeground()/60000);arr.put(o);}
+                  }catch(Exception ignored){}
+                  return arr.toString();
               }
 
               public class NotificationBridge {
-                  @JavascriptInterface
-                  public void requestPermission() {
-                      runOnUiThread(() -> requestNativeNotificationPermission());
-                  }
+                  @JavascriptInterface public void requestPermission(){runOnUiThread(()->requestNotificationPermission());}
+                  @JavascriptInterface public void sendWspeedNotification(String title,String body){runOnUiThread(()->notifyNow(title,body));}
+                  @JavascriptInterface public void sendTestNotification(){runOnUiThread(()->notifyNow("⚔️ Daily Quest","Notification system is working. Try not to ignore it, bum."));}
+                  @JavascriptInterface public void scheduleNotification(String title,String body,long delayMs){runOnUiThread(()->scheduleNotification(title,body,delayMs));}
+                  @JavascriptInterface public void openUsageSettings(){runOnUiThread(()->openUsageSettings());}
+                  @JavascriptInterface public boolean hasUsageAccess(){return usageAccessGranted();}
+                  @JavascriptInterface public String getUsageSummary(){return usageSummary();}
+              }
+          }
+          JAVA
 
-                  @JavascriptInterface
-                  public void sendTestNotification() {
-                      runOnUiThread(() -> showTestNotification());
+          cat > "$APP/java/com/dailyquest/app/AlarmReceiver.java" <<'JAVA'
+          package com.dailyquest.app;
+
+          import android.app.NotificationChannel;
+          import android.app.NotificationManager;
+          import android.content.BroadcastReceiver;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.os.Build;
+
+          public class AlarmReceiver extends BroadcastReceiver {
+              public static final String CHANNEL_ID="daily_quest_notifications";
+              @Override public void onReceive(Context context,Intent intent){
+                  NotificationManager nm=(NotificationManager)context.getSystemService(Context.NOTIFICATION_SERVICE);
+                  if(Build.VERSION.SDK_INT>=26){
+                      NotificationChannel c=new NotificationChannel(CHANNEL_ID,"Daily Quest",NotificationManager.IMPORTANCE_DEFAULT);
+                      nm.createNotificationChannel(c);
                   }
+                  android.app.Notification.Builder b=Build.VERSION.SDK_INT>=26?new android.app.Notification.Builder(context,CHANNEL_ID):new android.app.Notification.Builder(context);
+                  b.setSmallIcon(android.R.drawable.ic_dialog_info).setContentTitle(intent.getStringExtra("title")).setContentText(intent.getStringExtra("body")).setAutoCancel(true);
+                  nm.notify((int)(System.currentTimeMillis()%100000),b.build());
               }
           }
           JAVA
 
           MANIFEST="$APP/AndroidManifest.xml"
-          # W Speed uses HTTPS from the WebView, so the APK must declare Android's INTERNET permission.
-          if ! grep -q 'android.permission.INTERNET' "$MANIFEST"; then
-            sed -i '/<application/i\    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
-          fi
-          if ! grep -q 'android.permission.POST_NOTIFICATIONS' "$MANIFEST"; then
-            sed -i '/<application/i\    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "$MANIFEST"
-          fi
+          grep -q 'android.permission.INTERNET' "$MANIFEST" || sed -i '/<application/i\    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
+          grep -q 'android.permission.POST_NOTIFICATIONS' "$MANIFEST" || sed -i '/<application/i\    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "$MANIFEST"
+          grep -q 'android.permission.PACKAGE_USAGE_STATS' "$MANIFEST" || sed -i '/<application/i\    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />' "$MANIFEST"
+          grep -q 'AlarmReceiver' "$MANIFEST" || sed -i '/<application/a\        <receiver android:name=".AlarmReceiver" android:exported="false" />' "$MANIFEST"
 
       - name: Repack updated Android project ZIP
         run: |
@@ -202,42 +183,30 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add Daily_Quest_PhoneBuild.zip
-          if git diff --cached --quiet; then
-            echo "No ZIP changes to commit."
-          else
-            git commit -m "Add W Speed knight avatar and native notifications"
-            git push
-          fi
+          if git diff --cached --quiet; then echo "No ZIP changes to commit."; else git commit -m "Build Daily Quest v2 Android layer"; git push; fi
 
       - name: Set up Java
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
-
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-
       - name: Install Android SDK
-        run: |
-          sdkmanager "platforms;android-35" "build-tools;35.0.0"
-
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
-
       - name: Build APK
         run: |
           PROJECT=$(dirname "$(find build_project -name settings.gradle -type f | head -1)")
           cd "$PROJECT"
           gradle --no-daemon assembleDebug
-
       - name: Find APK
         run: find build_project -name "*.apk" -type f -print
-
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Daily-Quest-APK
+          name: Daily-Quest-APK-v2
           path: 'build_project/**/*.apk'
