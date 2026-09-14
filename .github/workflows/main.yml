@@ -24,31 +24,49 @@ jobs:
           rm -rf build_project
           mkdir -p build_project
           unzip -o Daily_Quest_PhoneBuild.zip -d build_project
-          echo "Extracted files:"
-          find build_project -maxdepth 6 -type f | head -100
 
-      - name: Apply latest Daily Quest HTML and native notifications
+      - name: Apply native notifications
         run: |
           PROJECT=$(dirname "$(find build_project -name settings.gradle -type f | head -1)")
           APP="$PROJECT/app/src/main"
           mkdir -p "$APP/assets"
           cp Daily_Quest_Web/index.html "$APP/assets/index.html"
 
-          python3 - <<'PY'
+          python3 - "$APP/assets/index.html" <<'PY'
           from pathlib import Path
-          p = Path("$APP/assets/index.html")
-          text = p.read_text(encoding="utf-8")
+          p = Path(__import__('sys').argv[1])
+          text = p.read_text(encoding='utf-8')
+
+          if 'sendTestNotification()' not in text:
+              marker = '</script>'
+              additions = '''
+          function requestNotify(){
+            if(window.AndroidNotifications){
+              AndroidNotifications.requestPermission();
+            } else if('Notification' in window){
+              Notification.requestPermission();
+            } else {
+              alert('Native Android notifications are unavailable.');
+            }
+          }
+          function sendTestNotification(){
+            if(window.AndroidNotifications){
+              AndroidNotifications.sendTestNotification();
+            } else if('Notification' in window && Notification.permission==='granted'){
+              new Notification('⚔️ Daily Quest',{body:'Notification system is working!'});
+            } else {
+              alert('Enable notifications first.');
+            }
+          }
+          '''
+              text = text.replace(marker, additions + marker, 1)
+
           old = '<button class="secondary" onclick="requestNotify()">🔔 Enable notifications</button><button class="danger" onclick="resetAll()">Reset all data</button>'
           new = '<button class="secondary" onclick="requestNotify()">🔔 Enable notifications</button><button class="good" onclick="sendTestNotification()">📲 Send test notification</button><button class="danger" onclick="resetAll()">Reset all data</button>'
           if old in text:
               text = text.replace(old, new, 1)
-          elif 'sendTestNotification()' not in text:
-              text = text.replace('</script>', '''\nfunction requestNotify(){\n  if(window.AndroidNotifications){AndroidNotifications.requestPermission();}\n  else if('Notification' in window){Notification.requestPermission();}\n  else{alert('Native Android notifications are unavailable.');}\n}\nfunction sendTestNotification(){\n  if(window.AndroidNotifications){AndroidNotifications.sendTestNotification();}\n  else if('Notification' in window && Notification.permission==='granted'){new Notification('⚔️ Daily Quest',{body:'Notification system is working!' });}\n  else{alert('Enable notifications first.');}\n}\n</script>''', 1)
-          else:
-              pass
-          if 'function sendTestNotification()' not in text:
-              text = text.replace('</script>', '''\nfunction requestNotify(){if(window.AndroidNotifications){AndroidNotifications.requestPermission();}else if('Notification' in window){Notification.requestPermission();}}\nfunction sendTestNotification(){if(window.AndroidNotifications){AndroidNotifications.sendTestNotification();}else if('Notification' in window && Notification.permission==='granted'){new Notification('⚔️ Daily Quest',{body:'Notification system is working!'});}}\n</script>''', 1)
-          p.write_text(text, encoding="utf-8")
+
+          p.write_text(text, encoding='utf-8')
           PY
 
           cat > "$APP/java/com/dailyquest/app/MainActivity.java" <<'JAVA'
@@ -90,10 +108,7 @@ jobs:
               private void createNotificationChannel() {
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                       NotificationChannel channel = new NotificationChannel(
-                          CHANNEL_ID,
-                          "Daily Quest",
-                          NotificationManager.IMPORTANCE_DEFAULT
-                      );
+                          CHANNEL_ID, "Daily Quest", NotificationManager.IMPORTANCE_DEFAULT);
                       channel.setDescription("Daily Quest reminders and test notifications");
                       notificationManager.createNotificationChannel(channel);
                   }
@@ -146,7 +161,6 @@ jobs:
           if ! grep -q 'android.permission.POST_NOTIFICATIONS' "$MANIFEST"; then
             sed -i '/<application/i\    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' "$MANIFEST"
           fi
-          echo "Native notification support applied."
 
       - name: Repack updated Android project ZIP
         run: |
@@ -154,7 +168,6 @@ jobs:
           rm -f Daily_Quest_PhoneBuild.zip
           cd "$PROJECT"
           zip -qr "$GITHUB_WORKSPACE/Daily_Quest_PhoneBuild.zip" .
-          echo "Updated ZIP created."
 
       - name: Commit updated project ZIP
         run: |
@@ -189,14 +202,11 @@ jobs:
       - name: Build APK
         run: |
           PROJECT=$(dirname "$(find build_project -name settings.gradle -type f | head -1)")
-          echo "Project found at: $PROJECT"
           cd "$PROJECT"
           gradle --no-daemon assembleDebug
 
       - name: Find APK
-        run: |
-          echo "Searching for APK..."
-          find build_project -name "*.apk" -type f -print
+        run: find build_project -name "*.apk" -type f -print
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
