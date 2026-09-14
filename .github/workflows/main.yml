@@ -25,12 +25,15 @@ jobs:
           mkdir -p build_project
           unzip -o Daily_Quest_PhoneBuild.zip -d build_project
 
-      - name: Apply native notifications
+      - name: Apply native notifications and W Speed icon
         run: |
           PROJECT=$(dirname "$(find build_project -name settings.gradle -type f | head -1)")
           APP="$PROJECT/app/src/main"
           mkdir -p "$APP/assets"
           cp Daily_Quest_Web/index.html "$APP/assets/index.html"
+
+          # W Speed icon: a real IShowSpeed portrait in Roman warrior armor from his Croatia stream.
+          curl -L --fail --retry 3 -o "$APP/assets/w_speed_icon.jpg" "https://images.complex.com/complex/image/upload/c_crop,h_1760,w_2840,x_0,y_0/g_xy_center,x_1415,y_666/v1751915394/sanity-new/Screenshot_2025-07-07_at_15.09.35_cqfwnk"
 
           python3 - "$APP/assets/index.html" <<'PY'
           from pathlib import Path
@@ -65,6 +68,18 @@ jobs:
           new = '<button class="secondary" onclick="requestNotify()">🔔 Enable notifications</button><button class="good" onclick="sendTestNotification()">📲 Send test notification</button><button class="danger" onclick="resetAll()">Reset all data</button>'
           if old in text:
               text = text.replace(old, new, 1)
+
+          css = '.wspeed-title{display:flex;align-items:center;gap:10px}.wspeed-avatar{width:48px;height:48px;border-radius:50%;object-fit:cover;object-position:center 32%;border:2px solid #8b7cff;box-shadow:0 0 0 3px #111722,0 6px 18px #0008;flex-shrink:0}'
+          if '.wspeed-avatar{' not in text:
+              text = text.replace('</style>', css + '</style>', 1)
+
+          old_heading = '<h2>🤖 AI Companion</h2>'
+          new_heading = '<h2 class="wspeed-title"><img class="wspeed-avatar" src="w_speed_icon.jpg" alt="W Speed"><span>⚔️ W Speed</span></h2>'
+          if old_heading in text:
+              text = text.replace(old_heading, new_heading, 1)
+
+          text = text.replace('<b>Quest AI:</b>', '<b>W Speed:</b>')
+          text = text.replace('Hey! I\'m your quest companion.', 'Ayo, knight. I\'m W Speed. Your quest companion—and the bastard who will remind you when you\'re slacking.')
 
           p.write_text(text, encoding='utf-8')
           PY
@@ -177,7 +192,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No ZIP changes to commit."
           else
-            git commit -m "Add native Daily Quest notifications"
+            git commit -m "Add W Speed knight avatar and native notifications"
             git push
           fi
 
