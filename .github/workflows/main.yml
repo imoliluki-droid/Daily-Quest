@@ -81,6 +81,12 @@ jobs:
           text = text.replace('<b>Quest AI:</b>', '<b>W Speed:</b>')
           text = text.replace('Hey! I\'m your quest companion.', 'Ayo, knight. I\'m W Speed. Your quest companion—and the bastard who will remind you when you\'re slacking.')
 
+          # Diagnostic mode: expose the exact browser/network failure instead of hiding it behind the generic message.
+          marker = "ai.innerHTML='<b>W Speed:</b> My connection to the realm failed for a moment. Try again.'"
+          diagnostic = "ai.innerHTML='<b>W Speed:</b> Connection diagnostic: '+escapeHTML(e&&e.message?e.message:String(e))+'<br><span class=\"note\">If Render shows no request, the APK request did not reach the backend.</span>'"
+          if marker in text and 'Connection diagnostic:' not in text:
+              text = text.replace(marker, diagnostic, 1)
+
           p.write_text(text, encoding='utf-8')
           PY
 
