@@ -11,12 +11,12 @@ app.use((req,res,next)=>{
 
 app.use(express.json({limit:'32kb'}));
 
-const SYSTEM_PROMPT=`You are W Speed, The Knight of Reality and Daily Quest's personal quest companion. You are an aggressive but genuinely supportive medieval knight with modern Gen-Z internet speech. Push the user toward college, studying, editing, training, sleep, and saving for their PC. Zero patience for excuses, but genuinely want them to win. Use medieval-only, Gen-Z-only, or mixed speech naturally; do not force slang or profanity. Humor is sarcastic, absurd, dark, and unexpected. Avoid dad jokes and corporate Gen-Z. Use a recognizable fictional/anime/game/pop-culture/creator/historical reference roughly 10-15% of the time when it improves the punchline. NEVER reference Dragon Ball or any Dragon Ball character. References are unexpected punchline ingredients, not generic comparisons. For real people avoid death, serious tragedy, protected traits, or medical conditions. React to supplied quest, streak, study, editing, training, sleep, and PC-fund context. Keep replies short and punchy unless asked for detail. Never claim actions you did not perform.`;
+const SYSTEM_PROMPT=`You are W Speed, the Knight of Reality and Daily Quest's personal quest companion. You are modern, casual, sarcastic, chaotic, aggressive but genuinely supportive. Speak like a real person, not a medieval Shakespeare character. Keep the knight identity, but use medieval references only occasionally as jokes. Do not constantly use thou, thee, thy, verily, or my liege. Push the user toward college, studying, editing, training, sleep, and saving for their PC. Ruthlessly attack excuses and self-sabotage, never the person's appearance, protected traits, inherent intelligence, or worth. You can say an excuse is pathetic, a plan is garbage, or that procrastination is ridiculous, but when the user is genuinely struggling, switch from roast to blunt support and help them recover. Humor is sarcastic, absurd, dark, unexpected, and internet-aware. Avoid dad jokes and corporate Gen-Z. Use recognizable fictional, game, anime, creator, or historical references roughly 10-15% of the time when they improve the punchline, but NEVER reference Dragon Ball or any Dragon Ball character. React to supplied quest, streak, study, editing, training, sleep, and PC-fund context. Keep replies short and punchy unless asked for detail. Prefer short conversational chunks and natural pauses. Never claim actions you did not perform.`;
 const clean=(v,n=1200)=>typeof v==='string'?v.slice(0,n):'';
 const GEMINI_API_URL='https://generativelanguage.googleapis.com/v1/interactions';
 const REQUEST_TIMEOUT_MS=12000;
 const COOLDOWN_MS=45000;
-const MODELS=['gemini-3.5-flash','gemini-3.5-flash-lite','gemini-3.7-flash'];
+const MODELS=['gemini-3.8-flash','gemini-3.5-flash','gemini-3.5-flash-lite'];
 const modelCooldown=new Map();
 
 function localFallback(message,context){
@@ -31,7 +31,6 @@ function localFallback(message,context){
   return options[Math.floor(Math.random()*options.length)];
 }
 
-// Interactions responses can expose text either as output_text or inside model_output steps.
 function extractReply(data){
   if(typeof data?.output_text==='string'&&data.output_text.trim()) return clean(data.output_text.trim());
   const steps=Array.isArray(data?.steps)?data.steps:[];
@@ -69,7 +68,97 @@ async function callModel(model,prompt){
   }finally{clearTimeout(timer)}
 }
 
-app.get('/api/wspeed/health',(_q,r)=>r.json({ok:true,service:'Daily Quest W Speed backend',aiConfigured:Boolean(process.env.GEMINI_API_KEY),providerConfigured:true,api:'interactions-v1',models:MODELS,thinking:'minimal'}));
+async function streamModel(model,prompt,onText){
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),REQUEST_TIMEOUT_MS);
+  try{
+    const upstream=await fetch(GEMINI_API_URL+'?alt=sse',{
+      method:'POST',
+      signal:controller.signal,
+      headers:{'Content-Type':'application/json','Accept':'text/event-stream','x-goog-api-key':process.env.GEMINI_API_KEY},
+      body:JSON.stringify({
+        model,
+        system_instruction:SYSTEM_PROMPT,
+        input:prompt,
+        stream:true,
+        generation_config:{thinking_level:'minimal',max_output_tokens:180}
+      })
+    });
+    if(!upstream.ok || !upstream.body){
+      const text=await upstream.text();
+      return {ok:false,status:upstream.status,error:text};
+    }
+    const reader=upstream.body.getReader();
+    const decoder=new TextDecoder();
+    let buffer='';
+    while(true){
+      const {value,done}=await reader.read();
+      if(done) break;
+      buffer+=decoder.decode(value,{stream:true});
+      const events=buffer.split(/\n\n/);
+      buffer=events.pop()||'';
+      for(const event of events){
+        for(const line of event.split('\n')){
+          if(!line.startsWith('data:')) continue;
+          const raw=line.slice(5).trim();
+          if(!raw || raw==='[DONE]') continue;
+          try{
+            const e=JSON.parse(raw);
+            if(e?.event_type==='step.delta' && e?.delta?.type==='text' && typeof e.delta.text==='string') await onText(e.delta.text);
+          }catch{}
+        }
+      }
+    }
+    return {ok:true,status:200};
+  }finally{clearTimeout(timer)}
+}
+
+app.get('/api/wspeed/health',(_q,r)=>r.json({ok:true,service:'Daily Quest W Speed backend',aiConfigured:Boolean(process.env.GEMINI_API_KEY),providerConfigured:true,api:'interactions-v1',models:MODELS,thinking:'minimal',streaming:true}));
+
+app.post('/api/wspeed/stream',async(req,res)=>{
+  const message=clean(req.body?.message,1000);
+  const context=req.body?.context&&typeof req.body.context==='object'?req.body.context:{};
+  if(!message)return res.status(400).json({error:'message is required'});
+  res.status(200);
+  res.setHeader('Content-Type','text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control','no-cache, no-transform');
+  res.setHeader('Connection','keep-alive');
+  if(typeof res.flushHeaders==='function')res.flushHeaders();
+
+  const send=text=>{if(!res.writableEnded)res.write(`data: ${JSON.stringify({text})}\n\n`)};
+  const prompt=`Quest context:\n${JSON.stringify(context).slice(0,3500)}\n\nUser: ${message}`;
+
+  if(!process.env.GEMINI_API_KEY){
+    const fallback=localFallback(message,context);
+    for(const chunk of fallback.match(/.{1,18}(?:\s+|$)/g)||[fallback])send(chunk);
+    res.write('data: [DONE]\n\n');
+    return res.end();
+  }
+
+  const now=Date.now();
+  const available=MODELS.filter(m=>(modelCooldown.get(m)||0)<=now);
+  const candidates=available.length?available:MODELS;
+  for(const model of candidates){
+    try{
+      const result=await streamModel(model,prompt,send);
+      if(result.ok){
+        modelCooldown.delete(model);
+        res.write('data: [DONE]\n\n');
+        return res.end();
+      }
+      const transient=result.status===408||result.status===409||result.status===429||result.status>=500;
+      if(transient)modelCooldown.set(model,Date.now()+COOLDOWN_MS);
+    }catch(e){
+      modelCooldown.set(model,Date.now()+COOLDOWN_MS);
+      console.warn(`Gemini stream failed on ${model}: ${e?.name||e?.message||e}`);
+    }
+  }
+
+  const fallback=localFallback(message,context);
+  for(const chunk of fallback.match(/.{1,18}(?:\s+|$)/g)||[fallback])send(chunk);
+  res.write('data: [DONE]\n\n');
+  res.end();
+});
 
 app.post('/api/wspeed/chat',async(req,res)=>{
   try{
@@ -90,28 +179,17 @@ app.post('/api/wspeed/chat',async(req,res)=>{
           const reply=extractReply(result.data);
           if(reply){
             modelCooldown.delete(model);
-            if(model!==MODELS[0]) console.warn(`Gemini fallback succeeded with ${model}`);
             return res.json({reply,online:true,model});
           }
-          // HTTP 200 with an incomplete/async response is not a provider outage.
-          // Give the next model a chance rather than incorrectly labeling 200 non-retryable.
-          console.warn(`Gemini ${model} returned HTTP 200 without usable text; moving to next fallback.`);
           continue;
         }
         const transient=result.status===408||result.status===409||result.status===429||result.status>=500;
-        if(transient){
-          modelCooldown.set(model,Date.now()+COOLDOWN_MS);
-          console.warn(`Gemini temporary error ${result.status||'unknown'} on ${model}; moving to next fallback.`);
-          continue;
-        }
-        console.warn(`Gemini non-retryable error ${result.status||'unknown'} on ${model}; moving to next fallback.`);
+        if(transient)modelCooldown.set(model,Date.now()+COOLDOWN_MS);
       }catch(e){
         modelCooldown.set(model,Date.now()+COOLDOWN_MS);
-        console.warn(`Gemini request failed on ${model}: ${e?.name||e?.message||e}; moving to next fallback.`);
+        console.warn(`Gemini request failed on ${model}: ${e?.name||e?.message||e}`);
       }
     }
-
-    console.warn('Gemini provider unavailable after fast fallback chain; using local W Speed response.');
     return res.json({reply:localFallback(message,context),online:false,fallback:true});
   }catch(e){
     console.error(e);
