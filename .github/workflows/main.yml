@@ -14,28 +14,22 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract current latest Android project
+      - name: Extract and patch latest Android project
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
           rm -rf build_project
           mkdir -p build_project
           unzip -q Daily_Quest_PhoneBuild.zip -d build_project
-
-      - name: Preserve current app and add Activity Awareness only
-        shell: bash
-        run: |
-          set -e
           PROJECT=$(dirname "$(find build_project -name settings.gradle -type f | head -1)")
           APP="$PROJECT/app/src/main"
           HTML="$APP/assets/index.html"
           JAVA="$APP/java/com/dailyquest/app/MainActivity.java"
           MANIFEST="$APP/AndroidManifest.xml"
-
           test -s "$HTML"
           test -s "$JAVA"
           grep -q 'W Speed' "$HTML"
@@ -44,45 +38,98 @@ jobs:
           python3 - "$HTML" <<'PY'
           from pathlib import Path
           import sys
-          p=Path(sys.argv[1])
-          text=p.read_text(encoding='utf-8')
+          p=Path(sys.argv[1]); text=p.read_text(encoding='utf-8')
+          required=['function sendAI()','function toggleOnlineMode()','function openWSpeedProfile()','function requestUsage()','function confirmComplete(']
+          missing=[x for x in required if x not in text]
+          if missing:
+              raise SystemExit('Latest app source is missing expected functions: '+', '.join(missing))
 
-          if 'function requestUsageAccess()' not in text:
-              marker='<button class="secondary" onclick="requestNotify()">'
-              button='<button class="secondary" onclick="requestUsageAccess()">⚔️ Activity Awareness</button>'
-              if marker not in text:
-                  raise SystemExit('Notification button marker not found; refusing to alter the current UI.')
-              text=text.replace(marker,button+marker,1)
-              fn='''\nfunction requestUsageAccess(){\n  if(window.ActivityAwareness){\n    ActivityAwareness.openUsageAccessSettings();\n  }else{\n    alert("Activity Awareness is unavailable in this build.");\n  }\n}\n'''
-              end='</script>'
-              if end not in text:
-                  raise SystemExit('Script boundary not found; refusing to alter the current UI.')
-              text=text.replace(end,fn+end,1)
+          # Restore the visible W Speed controls without redesigning the existing UI.
+          menu_marker='<div class="menu" id="menu">'
+          if 'id="onlineModeBtn"' not in text:
+              inject='<button class="ghost" id="onlineModeBtn" onclick="toggleMenu();toggleOnlineMode()">🌐 Online Mode: OFF</button><button class="ghost" onclick="toggleMenu();openWSpeedProfile()">⚔️ W Speed Profile</button>'
+              if menu_marker not in text:
+                  raise SystemExit('Menu marker missing; refusing UI alteration.')
+              text=text.replace(menu_marker,menu_marker+inject,1)
+
+          # Descriptions are optional now.
+          text=text.replace("const desc=document.getElementById('qeDesc').value.trim();if(!desc)return toast('Every quest needs a description.');", "const desc=document.getElementById('qeDesc').value.trim();", 1)
+          text=text.replace("q.description=document.getElementById('edesc').value.trim();if(!q.description)return toast('A quest description is required.');", "q.description=document.getElementById('edesc').value.trim();", 1)
+
+          # Use the dedicated Activity Awareness bridge, not the notification bridge.
+          text=text.replace("if(window.AndroidNotifications){AndroidNotifications.openUsageSettings();toast('Enable Usage Access for Daily Quest, then return here.')}else toast('Activity awareness is Android-only.')", "if(window.ActivityAwareness){ActivityAwareness.openUsageAccessSettings();toast('Enable Usage Access for Daily Quest, then return here.')}else toast('Activity awareness is unavailable in this build.')", 1)
+
+          # W Speed reacts when a quest is confirmed complete.
+          if 'function wspeedQuestReaction(' not in text:
+              marker='function confirmComplete(id){'
+              reaction="function wspeedQuestReaction(q){const lines=['Quest cleared. Nice. Do that again tomorrow.','You actually did it. The kingdom survives another day.','XP secured. Your procrastination department is furious.','That checkbox just got absolutely destroyed.'];addMsg('ai',lines[Math.floor(Math.random()*lines.length)]+' +'+(q.xp||25)+' XP.');}\n"
+              text=text.replace(marker,reaction+marker,1)
+          text=text.replace("toast('Quest cleared. +'+(q.xp||25)+' XP');renderQuests();renderAchievements()", "toast('Quest cleared. +'+(q.xp||25)+' XP');renderQuests();renderAchievements();wspeedQuestReaction(q)", 1)
+
+          if 'addWelcome();updateOnlineModeUI();' not in text:
+              text=text.replace('addWelcome();','addWelcome();updateOnlineModeUI();',1)
 
           p.write_text(text,encoding='utf-8')
           PY
 
           python3 - "$JAVA" <<'PY'
           from pathlib import Path
-          import sys
-          p=Path(sys.argv[1])
-          text=p.read_text(encoding='utf-8')
+          import sys,re
+          p=Path(sys.argv[1]); text=p.read_text(encoding='utf-8')
+
+          if 'import android.content.Intent;' not in text:
+              anchor='import android.content.Context;'
+              if anchor in text: text=text.replace(anchor,anchor+'\nimport android.content.Intent;',1)
+              else: text='import android.content.Intent;\n'+text
+          if 'import android.provider.Settings;' not in text:
+              anchor='import android.os.Bundle;'
+              if anchor in text: text=text.replace(anchor,anchor+'\nimport android.provider.Settings;',1)
+              else: text='import android.provider.Settings;\n'+text
+
+          def replace_method(src,name,new_body):
+              pat=re.compile(r'public\s+void\s+'+re.escape(name)+r'\s*\(\s*\)\s*\{')
+              m=pat.search(src)
+              if not m: return src,False
+              i=m.end()-1; depth=0
+              for j in range(i,len(src)):
+                  if src[j]=='{': depth+=1
+                  elif src[j]=='}':
+                      depth-=1
+                      if depth==0:
+                          return src[:i+1]+'\n'+new_body+'\n'+src[j:],True
+              raise SystemExit('Unbalanced Java method '+name)
+
+          direct='startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS));'
+          text,found=replace_method(text,'openUsageSettings',direct)
 
           if 'ActivityAwarenessBridge' not in text:
-              if 'import android.content.Intent;' not in text:
-                  text=text.replace('import android.content.pm.PackageManager;','import android.content.Intent;\n          import android.content.pm.PackageManager;')
-              if 'import android.provider.Settings;' not in text:
-                  text=text.replace('import android.os.Bundle;','import android.os.Bundle;\n          import android.provider.Settings;')
               anchor='w.addJavascriptInterface(new NotificationBridge(), "AndroidNotifications");'
               if anchor not in text:
-                  raise SystemExit('Notification bridge anchor not found; refusing to replace MainActivity.')
-              text=text.replace(anchor,anchor+'\n                  w.addJavascriptInterface(new ActivityAwarenessBridge(), "ActivityAwareness");',1)
-              bridge='''\n\n              public class ActivityAwarenessBridge {\n                  @JavascriptInterface\n                  public void openUsageAccessSettings() {\n                      runOnUiThread(() -> startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)));\n                  }\n              }\n'''
+                  raise SystemExit('Notification bridge anchor not found; refusing to alter MainActivity.')
+              text=text.replace(anchor,anchor+'\n        w.addJavascriptInterface(new ActivityAwarenessBridge(), "ActivityAwareness");',1)
+              bridge='''
+    public class ActivityAwarenessBridge {
+        @android.webkit.JavascriptInterface
+        public void openUsageAccessSettings() {
+            startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS));
+        }
+    }
+'''
               idx=text.rfind('\n}')
-              if idx < 0:
-                  raise SystemExit('MainActivity closing brace not found; refusing to alter Java.')
+              if idx<0: raise SystemExit('MainActivity closing brace not found')
               text=text[:idx]+bridge+text[idx:]
+          elif 'ActivityAwareness"' not in text:
+              anchor='w.addJavascriptInterface(new NotificationBridge(), "AndroidNotifications");'
+              if anchor not in text: raise SystemExit('Notification bridge anchor not found')
+              text=text.replace(anchor,anchor+'\n        w.addJavascriptInterface(new ActivityAwarenessBridge(), "ActivityAwareness");',1)
 
+          # Hard safety check: the old recursive implementation must be gone.
+          if found:
+              m=re.search(r'public\s+void\s+openUsageSettings\s*\(\s*\)\s*\{(.*?)\n\s*\}',text,re.S)
+              if m and 'openUsageSettings(' in m.group(1):
+                  raise SystemExit('Recursive openUsageSettings implementation still present')
+          if 'ACTION_USAGE_ACCESS_SETTINGS' not in text:
+              raise SystemExit('Usage settings action missing')
           p.write_text(text,encoding='utf-8')
           PY
 
@@ -93,15 +140,18 @@ jobs:
             sed -i 's#<manifest #<manifest xmlns:tools="http://schemas.android.com/tools" #' "$MANIFEST"
           fi
 
+          grep -q 'id="onlineModeBtn"' "$HTML"
+          grep -q 'W Speed Profile' "$HTML"
           grep -q 'ActivityAwareness' "$HTML"
-          grep -q 'ActivityAwarenessBridge' "$JAVA"
+          grep -q 'ActivityAwareness' "$JAVA"
           grep -q 'ACTION_USAGE_ACCESS_SETTINGS' "$JAVA"
-          ! grep -q 'openUsageSettings(){openUsageSettings()' "$HTML"
-          echo "Verified: current latest project preserved; Activity Awareness added without restoring an older base."
+          ! grep -q 'Every quest needs a description' "$HTML"
+          ! grep -q 'A quest description is required' "$HTML"
+          echo "Verified latest project patch: W Speed controls, optional descriptions, quest reaction, and non-recursive Activity Awareness."
 
       - name: Repack updated Android project ZIP
         run: |
-          set -e
+          set -euo pipefail
           PROJECT=$(dirname "$(find build_project -name settings.gradle -type f | head -1)")
           rm -f Daily_Quest_PhoneBuild.zip
           cd "$PROJECT"
@@ -109,14 +159,14 @@ jobs:
 
       - name: Commit updated project ZIP
         run: |
-          set -e
+          set -euo pipefail
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.email "41898282+users.noreply.github.com"
           git add Daily_Quest_PhoneBuild.zip
           if git diff --cached --quiet; then
             echo "No ZIP changes to commit."
           else
-            git commit -m "Add Activity Awareness to latest Daily Quest build"
+            git commit -m "Implement Daily Quest v2 fixes and W Speed improvements"
             git push
           fi
 
@@ -130,8 +180,7 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install Android SDK
-        run: |
-          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -140,7 +189,7 @@ jobs:
 
       - name: Build APK
         run: |
-          set -e
+          set -euo pipefail
           PROJECT=$(dirname "$(find build_project -name settings.gradle -type f | head -1)")
           cd "$PROJECT"
           gradle --no-daemon assembleDebug
@@ -151,6 +200,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Daily-Quest-APK-v2
+          name: Daily-Quest-APK-v3
           path: 'build_project/**/*.apk'
           if-no-files-found: error
