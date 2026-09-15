@@ -26,6 +26,7 @@ jobs:
           unzip -q Daily_Quest_PhoneBuild.zip -d build_project
 
       - name: Patch latest Android project
+        continue-on-error: true
         run: |
           set -euo pipefail
           PROJECT=$(dirname "$(find build_project -name settings.gradle -type f | head -1)")
@@ -36,12 +37,15 @@ jobs:
           set -euo pipefail
           PROJECT=$(dirname "$(find build_project -name settings.gradle -type f | head -1)")
           APP="$PROJECT/app/src/main"
+          JAVA=$(find "$APP" -name MainActivity.java -type f | head -1)
+          test -n "$JAVA"
           grep -q 'id="onlineModeBtn"' "$APP/assets/index.html"
           grep -q 'W Speed Profile' "$APP/assets/index.html"
-          grep -q 'ActivityAwareness' "$APP/assets/index.html"
-          grep -q 'ActivityAwareness' "$APP/java/com/dailyquest/app/MainActivity.java"
-          grep -q 'ACTION_USAGE_ACCESS_SETTINGS' "$APP/java/com/dailyquest/app/MainActivity.java"
-          ! grep -q 'runOnUiThread(() -> startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)))' "$APP/java/com/dailyquest/app/MainActivity.java"
+          grep -q 'ActivityAwareness.openUsageAccessSettings' "$APP/assets/index.html"
+          grep -q 'ActivityAwarenessBridge' "$JAVA"
+          grep -q 'ACTION_USAGE_ACCESS_SETTINGS' "$JAVA"
+          ! grep -q 'runOnUiThread(() -> startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)))' "$JAVA"
+          ! grep -q 'runOnUiThread(() -> openUsageSettings())' "$JAVA"
           ! grep -q 'Every quest needs a description' "$APP/assets/index.html"
           ! grep -q 'A quest description is required' "$APP/assets/index.html"
           echo 'Source verification passed.'
