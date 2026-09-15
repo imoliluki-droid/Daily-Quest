@@ -18,136 +18,33 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract and patch latest Android project
-        shell: bash
+      - name: Extract latest Android project
         run: |
           set -euo pipefail
           rm -rf build_project
           mkdir -p build_project
           unzip -q Daily_Quest_PhoneBuild.zip -d build_project
+
+      - name: Patch latest Android project
+        run: |
+          set -euo pipefail
+          PROJECT=$(dirname "$(find build_project -name settings.gradle -type f | head -1)")
+          python3 scripts/patch_latest_android.py "$PROJECT"
+
+      - name: Verify Activity Awareness and W Speed source
+        run: |
+          set -euo pipefail
           PROJECT=$(dirname "$(find build_project -name settings.gradle -type f | head -1)")
           APP="$PROJECT/app/src/main"
-          HTML="$APP/assets/index.html"
-          JAVA="$APP/java/com/dailyquest/app/MainActivity.java"
-          MANIFEST="$APP/AndroidManifest.xml"
-          test -s "$HTML"
-          test -s "$JAVA"
-          grep -q 'W Speed' "$HTML"
-          grep -q 'AndroidNotifications' "$JAVA"
-
-          python3 - "$HTML" <<'PY'
-          from pathlib import Path
-          import sys
-          p=Path(sys.argv[1]); text=p.read_text(encoding='utf-8')
-          required=['function sendAI()','function toggleOnlineMode()','function openWSpeedProfile()','function requestUsage()','function confirmComplete(']
-          missing=[x for x in required if x not in text]
-          if missing:
-              raise SystemExit('Latest app source is missing expected functions: '+', '.join(missing))
-
-          # Restore the visible W Speed controls without redesigning the existing UI.
-          menu_marker='<div class="menu" id="menu">'
-          if 'id="onlineModeBtn"' not in text:
-              inject='<button class="ghost" id="onlineModeBtn" onclick="toggleMenu();toggleOnlineMode()">🌐 Online Mode: OFF</button><button class="ghost" onclick="toggleMenu();openWSpeedProfile()">⚔️ W Speed Profile</button>'
-              if menu_marker not in text:
-                  raise SystemExit('Menu marker missing; refusing UI alteration.')
-              text=text.replace(menu_marker,menu_marker+inject,1)
-
-          # Descriptions are optional now.
-          text=text.replace("const desc=document.getElementById('qeDesc').value.trim();if(!desc)return toast('Every quest needs a description.');", "const desc=document.getElementById('qeDesc').value.trim();", 1)
-          text=text.replace("q.description=document.getElementById('edesc').value.trim();if(!q.description)return toast('A quest description is required.');", "q.description=document.getElementById('edesc').value.trim();", 1)
-
-          # Use the dedicated Activity Awareness bridge, not the notification bridge.
-          text=text.replace("if(window.AndroidNotifications){AndroidNotifications.openUsageSettings();toast('Enable Usage Access for Daily Quest, then return here.')}else toast('Activity awareness is Android-only.')", "if(window.ActivityAwareness){ActivityAwareness.openUsageAccessSettings();toast('Enable Usage Access for Daily Quest, then return here.')}else toast('Activity awareness is unavailable in this build.')", 1)
-
-          # W Speed reacts when a quest is confirmed complete.
-          if 'function wspeedQuestReaction(' not in text:
-              marker='function confirmComplete(id){'
-              reaction="function wspeedQuestReaction(q){const lines=['Quest cleared. Nice. Do that again tomorrow.','You actually did it. The kingdom survives another day.','XP secured. Your procrastination department is furious.','That checkbox just got absolutely destroyed.'];addMsg('ai',lines[Math.floor(Math.random()*lines.length)]+' +'+(q.xp||25)+' XP.');}\n"
-              text=text.replace(marker,reaction+marker,1)
-          text=text.replace("toast('Quest cleared. +'+(q.xp||25)+' XP');renderQuests();renderAchievements()", "toast('Quest cleared. +'+(q.xp||25)+' XP');renderQuests();renderAchievements();wspeedQuestReaction(q)", 1)
-
-          if 'addWelcome();updateOnlineModeUI();' not in text:
-              text=text.replace('addWelcome();','addWelcome();updateOnlineModeUI();',1)
-
-          p.write_text(text,encoding='utf-8')
-          PY
-
-          python3 - "$JAVA" <<'PY'
-          from pathlib import Path
-          import sys,re
-          p=Path(sys.argv[1]); text=p.read_text(encoding='utf-8')
-
-          if 'import android.content.Intent;' not in text:
-              anchor='import android.content.Context;'
-              if anchor in text: text=text.replace(anchor,anchor+'\nimport android.content.Intent;',1)
-              else: text='import android.content.Intent;\n'+text
-          if 'import android.provider.Settings;' not in text:
-              anchor='import android.os.Bundle;'
-              if anchor in text: text=text.replace(anchor,anchor+'\nimport android.provider.Settings;',1)
-              else: text='import android.provider.Settings;\n'+text
-
-          def replace_method(src,name,new_body):
-              pat=re.compile(r'public\s+void\s+'+re.escape(name)+r'\s*\(\s*\)\s*\{')
-              m=pat.search(src)
-              if not m: return src,False
-              i=m.end()-1; depth=0
-              for j in range(i,len(src)):
-                  if src[j]=='{': depth+=1
-                  elif src[j]=='}':
-                      depth-=1
-                      if depth==0:
-                          return src[:i+1]+'\n'+new_body+'\n'+src[j:],True
-              raise SystemExit('Unbalanced Java method '+name)
-
-          direct='startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS));'
-          text,found=replace_method(text,'openUsageSettings',direct)
-
-          if 'ActivityAwarenessBridge' not in text:
-              anchor='w.addJavascriptInterface(new NotificationBridge(), "AndroidNotifications");'
-              if anchor not in text:
-                  raise SystemExit('Notification bridge anchor not found; refusing to alter MainActivity.')
-              text=text.replace(anchor,anchor+'\n        w.addJavascriptInterface(new ActivityAwarenessBridge(), "ActivityAwareness");',1)
-              bridge='''
-    public class ActivityAwarenessBridge {
-        @android.webkit.JavascriptInterface
-        public void openUsageAccessSettings() {
-            startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS));
-        }
-    }
-'''
-              idx=text.rfind('\n}')
-              if idx<0: raise SystemExit('MainActivity closing brace not found')
-              text=text[:idx]+bridge+text[idx:]
-          elif 'ActivityAwareness"' not in text:
-              anchor='w.addJavascriptInterface(new NotificationBridge(), "AndroidNotifications");'
-              if anchor not in text: raise SystemExit('Notification bridge anchor not found')
-              text=text.replace(anchor,anchor+'\n        w.addJavascriptInterface(new ActivityAwarenessBridge(), "ActivityAwareness");',1)
-
-          # Hard safety check: the old recursive implementation must be gone.
-          if found:
-              m=re.search(r'public\s+void\s+openUsageSettings\s*\(\s*\)\s*\{(.*?)\n\s*\}',text,re.S)
-              if m and 'openUsageSettings(' in m.group(1):
-                  raise SystemExit('Recursive openUsageSettings implementation still present')
-          if 'ACTION_USAGE_ACCESS_SETTINGS' not in text:
-              raise SystemExit('Usage settings action missing')
-          p.write_text(text,encoding='utf-8')
-          PY
-
-          if ! grep -q 'android.permission.PACKAGE_USAGE_STATS' "$MANIFEST"; then
-            sed -i '/<application/i\    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />' "$MANIFEST"
-          fi
-          if ! grep -q 'xmlns:tools=' "$MANIFEST"; then
-            sed -i 's#<manifest #<manifest xmlns:tools="http://schemas.android.com/tools" #' "$MANIFEST"
-          fi
-
-          grep -q 'id="onlineModeBtn"' "$HTML"
-          grep -q 'W Speed Profile' "$HTML"
-          grep -q 'ActivityAwareness' "$HTML"
-          grep -q 'ActivityAwareness' "$JAVA"
-          grep -q 'ACTION_USAGE_ACCESS_SETTINGS' "$JAVA"
-          ! grep -q 'Every quest needs a description' "$HTML"
-          ! grep -q 'A quest description is required' "$HTML"
-          echo "Verified latest project patch: W Speed controls, optional descriptions, quest reaction, and non-recursive Activity Awareness."
+          grep -q 'id="onlineModeBtn"' "$APP/assets/index.html"
+          grep -q 'W Speed Profile' "$APP/assets/index.html"
+          grep -q 'ActivityAwareness' "$APP/assets/index.html"
+          grep -q 'ActivityAwareness' "$APP/java/com/dailyquest/app/MainActivity.java"
+          grep -q 'ACTION_USAGE_ACCESS_SETTINGS' "$APP/java/com/dailyquest/app/MainActivity.java"
+          ! grep -q 'runOnUiThread(() -> startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)))' "$APP/java/com/dailyquest/app/MainActivity.java"
+          ! grep -q 'Every quest needs a description' "$APP/assets/index.html"
+          ! grep -q 'A quest description is required' "$APP/assets/index.html"
+          echo 'Source verification passed.'
 
       - name: Repack updated Android project ZIP
         run: |
@@ -157,16 +54,16 @@ jobs:
           cd "$PROJECT"
           zip -qr "$GITHUB_WORKSPACE/Daily_Quest_PhoneBuild.zip" .
 
-      - name: Commit updated project ZIP
+      - name: Commit updated Android project
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+users.noreply.github.com"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add Daily_Quest_PhoneBuild.zip
           if git diff --cached --quiet; then
-            echo "No ZIP changes to commit."
+            echo 'No source ZIP changes.'
           else
-            git commit -m "Implement Daily Quest v2 fixes and W Speed improvements"
+            git commit -m "Implement Daily Quest v2 fixes"
             git push
           fi
 
@@ -195,7 +92,7 @@ jobs:
           gradle --no-daemon assembleDebug
 
       - name: Verify APK exists
-        run: find build_project -name "*.apk" -type f -print
+        run: test -s "$(find build_project -name '*.apk' -type f | head -1)"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
