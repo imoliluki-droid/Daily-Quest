@@ -8,15 +8,23 @@ html = app / 'assets' / 'index.html'
 java = app / 'java' / 'com' / 'dailyquest' / 'app' / 'MainActivity.java'
 manifest = app / 'AndroidManifest.xml'
 
-if not html.is_file() or not java.is_file():
+if not html.is_file() or not java.is_file() or not manifest.is_file():
     raise SystemExit('Expected Android source files were not found; refusing to guess a base.')
 
 text = html.read_text(encoding='utf-8')
-for marker in ('function sendAI()', 'function toggleOnlineMode()', 'function confirmComplete('):
+# These are stable features in the current source. Do not require implementation names
+# that may legitimately change between the latest source exports.
+for marker in ('function sendAI()', 'function toggleOnlineMode()', 'function requestUsage()'):
     if marker not in text:
         raise SystemExit(f'Latest Android source is missing expected marker: {marker}')
 
-# The latest source can expose the W Speed profile through a different internal name.
+if 'function confirmComplete(' not in text:
+    # Current exports may use a different completion function name. The build should
+    # still proceed; completion wiring is handled only when the known function exists.
+    completion_candidates = re.findall(r'function\s+([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{', text)
+    if not any(re.search(r'complete|finish|done|quest', name, re.I) for name in completion_candidates):
+        raise SystemExit('Latest Android source has no recognizable quest-completion handler; refusing to guess.')
+
 if 'function openWSpeedProfile(' not in text:
     text = "function openWSpeedProfile(){if(typeof openProfile==='function')return openProfile();if(typeof showProfile==='function')return showProfile();if(typeof openWSpeed==='function')return openWSpeed();toast('W Speed profile is unavailable in this build.');}\n" + text
 
@@ -27,25 +35,22 @@ if 'id="onlineModeBtn"' not in text:
         raise SystemExit('Menu marker missing; refusing UI alteration.')
     text = text.replace(menu, menu + controls, 1)
 
+# Remove description as a required field without disturbing the existing editor UI.
 text = text.replace("const desc=document.getElementById('qeDesc').value.trim();if(!desc)return toast('Every quest needs a description. Tell W Speed what actually has to be done.');", "const desc=document.getElementById('qeDesc').value.trim();")
 text = text.replace("q.description=document.getElementById('edesc').value.trim();if(!q.description)return toast('A quest description is required.');", "q.description=document.getElementById('edesc').value.trim();")
 text = text.replace("if(!q.description)return toast('Every quest needs a description.');", "")
 text = text.replace("if(!q.description)return toast('A quest description is required.');", "")
 
-# Activity Awareness: support either the older named function or a newer direct settings button.
-activity_impl = "if(window.ActivityAwareness){ActivityAwareness.openUsageAccessSettings();toast('Enable Usage Access for Daily Quest, then return here.')}else if(window.AndroidNotifications&&AndroidNotifications.openUsageSettings){AndroidNotifications.openUsageSettings();toast('Enable Usage Access for Daily Quest, then return here.')}else toast('Activity awareness is unavailable in this build.')"
-if 'function requestUsage()' in text:
-    text = re.sub(r"function\s+requestUsage\s*\(\s*\)\s*\{.*?\}", "function requestUsage(){" + activity_impl + "}", text, count=1, flags=re.S)
-else:
-    # If the latest source renamed the UI handler, replace any direct legacy bridge call instead.
-    text = text.replace('AndroidNotifications.openUsageSettings()', 'ActivityAwareness.openUsageAccessSettings()')
+old_usage = "if(window.AndroidNotifications){AndroidNotifications.openUsageSettings();toast('Enable Usage Access for Daily Quest, then return here.')}else toast('Activity awareness is Android-only.')"
+new_usage = "if(window.ActivityAwareness){ActivityAwareness.openUsageAccessSettings();toast('Enable Usage Access for Daily Quest, then return here.')}else toast('Activity awareness is unavailable in this build.')"
+text = text.replace(old_usage, new_usage)
 
-if 'function wspeedQuestReaction(' not in text:
+if 'function wspeedQuestReaction(' not in text and 'function confirmComplete(' in text:
     reaction = "function wspeedQuestReaction(q){const lines=['Quest cleared. Nice. Do that again tomorrow.','You actually did it. The kingdom survives another day.','XP secured. Your procrastination department is furious.','That checkbox just got absolutely destroyed.'];addMsg('ai',lines[Math.floor(Math.random()*lines.length)]+' +'+(q.xp||25)+' XP.');}\n"
     text = text.replace('function confirmComplete(id){', reaction + 'function confirmComplete(id){', 1)
 text = text.replace("toast('Quest cleared. +'+(q.xp||25)+' XP');renderQuests();renderAchievements()", "toast('Quest cleared. +'+(q.xp||25)+' XP');renderQuests();renderAchievements();wspeedQuestReaction(q)")
 
-if 'addWelcome();updateOnlineModeUI();' not in text:
+if 'updateOnlineModeUI();' not in text:
     text = text.replace('addWelcome();', 'addWelcome();updateOnlineModeUI();', 1)
 html.write_text(text, encoding='utf-8')
 
@@ -110,7 +115,7 @@ manifest.write_text(m, encoding='utf-8')
 
 if 'id="onlineModeBtn"' not in text: raise SystemExit('Online Mode control missing after patch.')
 if 'W Speed Profile' not in text: raise SystemExit('W Speed profile control missing after patch.')
-if 'ActivityAwareness' not in j: raise SystemExit('Activity Awareness bridge missing after patch.')
+if 'ActivityAwareness' not in text or 'ActivityAwareness' not in j: raise SystemExit('Activity Awareness bridge missing after patch.')
 if 'ACTION_USAGE_ACCESS_SETTINGS' not in j: raise SystemExit('Usage settings action missing.')
 if 'runOnUiThread(() -> startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)))' in j: raise SystemExit('Recursive/UI-wrapper Activity Awareness implementation still present.')
 if 'Every quest needs a description' in text or 'A quest description is required' in text: raise SystemExit('Description requirement still present.')
