@@ -12,7 +12,7 @@ if not html.is_file() or not java.is_file():
     raise SystemExit('Expected Android source files were not found; refusing to guess a base.')
 
 text = html.read_text(encoding='utf-8')
-for marker in ('function sendAI()', 'function toggleOnlineMode()', 'function requestUsage()', 'function confirmComplete('):
+for marker in ('function sendAI()', 'function toggleOnlineMode()', 'function confirmComplete('):
     if marker not in text:
         raise SystemExit(f'Latest Android source is missing expected marker: {marker}')
 
@@ -32,7 +32,13 @@ text = text.replace("q.description=document.getElementById('edesc').value.trim()
 text = text.replace("if(!q.description)return toast('Every quest needs a description.');", "")
 text = text.replace("if(!q.description)return toast('A quest description is required.');", "")
 
-text = text.replace("if(window.AndroidNotifications){AndroidNotifications.openUsageSettings();toast('Enable Usage Access for Daily Quest, then return here.')}else toast('Activity awareness is Android-only.')", "if(window.ActivityAwareness){ActivityAwareness.openUsageAccessSettings();toast('Enable Usage Access for Daily Quest, then return here.')}else toast('Activity awareness is unavailable in this build.')")
+# Activity Awareness: support either the older named function or a newer direct settings button.
+activity_impl = "if(window.ActivityAwareness){ActivityAwareness.openUsageAccessSettings();toast('Enable Usage Access for Daily Quest, then return here.')}else if(window.AndroidNotifications&&AndroidNotifications.openUsageSettings){AndroidNotifications.openUsageSettings();toast('Enable Usage Access for Daily Quest, then return here.')}else toast('Activity awareness is unavailable in this build.')"
+if 'function requestUsage()' in text:
+    text = re.sub(r"function\s+requestUsage\s*\(\s*\)\s*\{.*?\}", "function requestUsage(){" + activity_impl + "}", text, count=1, flags=re.S)
+else:
+    # If the latest source renamed the UI handler, replace any direct legacy bridge call instead.
+    text = text.replace('AndroidNotifications.openUsageSettings()', 'ActivityAwareness.openUsageAccessSettings()')
 
 if 'function wspeedQuestReaction(' not in text:
     reaction = "function wspeedQuestReaction(q){const lines=['Quest cleared. Nice. Do that again tomorrow.','You actually did it. The kingdom survives another day.','XP secured. Your procrastination department is furious.','That checkbox just got absolutely destroyed.'];addMsg('ai',lines[Math.floor(Math.random()*lines.length)]+' +'+(q.xp||25)+' XP.');}\n"
@@ -104,7 +110,7 @@ manifest.write_text(m, encoding='utf-8')
 
 if 'id="onlineModeBtn"' not in text: raise SystemExit('Online Mode control missing after patch.')
 if 'W Speed Profile' not in text: raise SystemExit('W Speed profile control missing after patch.')
-if 'ActivityAwareness' not in text or 'ActivityAwareness' not in j: raise SystemExit('Activity Awareness bridge missing after patch.')
+if 'ActivityAwareness' not in j: raise SystemExit('Activity Awareness bridge missing after patch.')
 if 'ACTION_USAGE_ACCESS_SETTINGS' not in j: raise SystemExit('Usage settings action missing.')
 if 'runOnUiThread(() -> startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)))' in j: raise SystemExit('Recursive/UI-wrapper Activity Awareness implementation still present.')
 if 'Every quest needs a description' in text or 'A quest description is required' in text: raise SystemExit('Description requirement still present.')
