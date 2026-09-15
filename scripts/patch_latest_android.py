@@ -12,9 +12,13 @@ if not html.is_file() or not java.is_file():
     raise SystemExit('Expected Android source files were not found; refusing to guess a base.')
 
 text = html.read_text(encoding='utf-8')
-for marker in ('function sendAI()', 'function toggleOnlineMode()', 'function openWSpeedProfile()', 'function requestUsage()', 'function confirmComplete('):
+for marker in ('function sendAI()', 'function toggleOnlineMode()', 'function requestUsage()', 'function confirmComplete('):
     if marker not in text:
         raise SystemExit(f'Latest Android source is missing expected marker: {marker}')
+
+# The latest source can expose the W Speed profile through a different internal name.
+if 'function openWSpeedProfile(' not in text:
+    text = "function openWSpeedProfile(){if(typeof openProfile==='function')return openProfile();if(typeof showProfile==='function')return showProfile();if(typeof openWSpeed==='function')return openWSpeed();toast('W Speed profile is unavailable in this build.');}\n" + text
 
 menu = '<div class="menu" id="menu">'
 if 'id="onlineModeBtn"' not in text:
